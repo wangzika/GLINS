@@ -2,3 +2,9 @@
 数据.zip
 数据/
 Users/
+data_test/
+*.bag
+*.pcd
+*.ply
+*.obs
+*.rnx
