@@ -1,0 +1,35 @@
+<launch>
+    <arg name="project" default="glins"/>
+
+    <param name="use_sim_time" value="true" />
+    <rosparam file="$(find glins)/config/params_HDL_32.yaml" command="load"/>
+
+    <!--- LOAM -->
+    <param name="saveDirectory" type="string" value="$(find glins)/data/"/>
+    <param name="configDirectory" type="string" value="$(find glins)/config/"/>
+    <param name="sequence" type="string" value="MAP"/>
+<!--     <include file="$(find glins)/launch/include/module_loam.launch"/> -->
+
+
+    <arg name="bagpath"  default="/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/lidar_imu_backup.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="lidar_topic" default="/velodyne_points"/>
+
+<!--     <node pkg="$(arg project)" type="$(arg project)_test_lio" name="$(arg project)_test_lio" output="screen"> -->
+<!--           <param name="useRoslaunch"  value="true" type="bool"/> -->
+<!--           <param name="bagpath"      value="$(arg bagpath)" type="string" /> -->
+<!--           <param name="imu_topic"   value="$(arg imu_topic)" type="string" /> -->
+<!--           <param name="lidar_topic" value="$(arg lidar_topic)" type="string" /> -->
+<!--           </node> -->
+
+    <!--- Robot State TF -->
+    <include file="$(find glins)/launch/include/module_robot_state_publisher.launch"/>
+
+    <!--- Run Navsat -->
+<!--     <node pkg="glins" type="glins_gpsOdometry" name="glins_gpsOdometry"/> -->
+
+    <!--- Run Rviz-->
+    <node pkg="rviz" type="rviz" name="$(arg project)_rviz"
+          args="-d $(find glins)/launch/include/config/vlp.rviz"/>
+
+</launch>

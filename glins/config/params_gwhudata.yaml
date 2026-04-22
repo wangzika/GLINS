@@ -1,0 +1,164 @@
+glins:
+
+  #  velodyne32
+
+  # Topics
+  pointCloudTopic: "velodyne_points"          # Point cloud data
+  imuTopic: "imu/data"                        # IMU data
+  odomTopic: "odometry/imu"                   # IMU pre-preintegration odometry, same frequency as IMU
+  gpsTopic: "gps_odom"                        # GPS odometry topic from navsat, see module_navsat.launch file
+
+  # Frames
+  lidarFrame: "base_link"
+  baselinkFrame: "base_link"
+  odometryFrame: "odom"
+  mapFrame: "map"
+
+  # GPS Settings
+  useGPS: false
+  gpsFrequence: 1                             # set proper gps frequence to align gps and lidar timestamp
+  useImuHeadingInitialization: true           # if using GPS data, set to "false"
+  useGpsElevation: false                      # if GPS elevation is bad, set to "false"
+  gpsCovThreshold: 8                          # m^2, threshold for using GPS data
+  poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
+  useObs: true
+  useCarrier: true
+  rtklibConfigPath: /mnt/f/GLINS/config/conf/gwhu.conf
+  fgoPath: /mnt/i/GREATWHUdata/campus-02/cp_02_nhc.pos
+
+
+  # debug setting
+  debugLidarTimestamp: true
+  debugImu: false
+  debugGps: false
+  addoptPose: true
+
+  # Export settings
+  savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3
+  savePCDDirectory: "/mnt/f/GLINS/data/MAP/"  # actually we do not use the floder to save maps
+  configDirectory: "/mnt/f/GLINS/data/"
+  sequence: "MAP"
+
+  sensor: velodyne                            # lidar sensor type, 'velodyne' or 'ouster' or 'livox' or 'hesai'
+  N_SCAN: 16                                  # number of lidar channel (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
+  Horizon_SCAN: 1800                          # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
+  downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
+  lidarMinRange: 3.0                          # default: 1.0, minimum lidar range to be used
+  lidarMaxRange: 100.0
+  lidarAssociateMode: 2                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
+  coupleMode: 1                               # 0: loosely coupled mode, 1: tightly coupled mode
+
+  # IMU Settings
+  imuFrequence: 100
+  imuAccNoise: 1.5e-2
+  imuGyrNoise: 3.9e-4
+  imuAccBiasN: 3.0e-3
+  imuGyrBiasN: 9.6e-5
+  imuGravity:  9.79338
+  imuRPYWeight: 0.01
+  useNHC: true
+  useLIO: false
+  NHCnoise: [0.1, 0.3]
+  thres_angular_velocity: 5.0
+
+  # initial Settings
+  useGroundTruthHeading: true
+  GroundTruthRoll:  -0.4167293931 #-0.6302191972
+  GroundTruthPitch: -0.2400005612 # 0.5555055007
+  GroundTruthHeading: 94.2041584472  #-82.2318939742
+
+  # Extrinsics (lidar -> IMU)
+  imuType: 0   # 0: 6a
+
+  extrinsicTrans: [  -0.005,-0.068, 0.469 ]
+  extrinsicRot: [ 1, 0, 0,
+                  0, 1, 0,
+                  0, 0, 1 ]
+  # extrinsicRot: [ 1.4288500000000001e-02,  9.9979200000000001e-01,  1.6048400000000001e-02,
+  #                -9.9988999999999995e-01,  1.2663300000000001e-02, -3.7801000000000002e-03,
+  #                -3.9852799999999999e-03, -1.5999300000000001e-02,  9.9986399999999998e-01 ]
+  extrinsicRPY: [ 1, 0, 0,
+                  0, 1, 0,
+                  0, 0, 1 ]
+  estimateExtGPS: false
+  extrinsicGPS: [ -0.050, -0.650, 0.150 ]
+
+  # LOAM feature threshold
+  edgeThreshold: 1.0
+  surfThreshold: 0.1
+  edgeFeatureMinValidNum: 10
+  surfFeatureMinValidNum: 100
+
+  # voxel filter paprams
+  odometrySurfLeafSize: 0.4                     # default: 0.4 - outdoor, 0.2 - indoor
+  mappingCornerLeafSize: 0.2                    # default: 0.2 - outdoor, 0.1 - indoor
+  mappingSurfLeafSize: 0.4                      # default: 0.4 - outdoor, 0.2 - indoor
+
+  # robot motion constraint (in case you are using a 2D robot)
+  z_tollerance: 1000                            # meters
+  rotation_tollerance: 1000                     # radians
+
+  # CPU Params
+  numberOfCores: 4                              # number of cores for mapping optimization
+  mappingProcessInterval: 0.08                  # seconds, regulate mapping frequency
+
+  # Surrounding map （加关键帧的判断条件）
+  surroundingkeyframeAddingDistThreshold: 1.0   # meters, regulate keyframe adding threshold
+  surroundingkeyframeAddingAngleThreshold: 0.2  # radians, regulate keyframe adding threshold
+  surroundingKeyframeDensity: 2.0               # meters, downsample surrounding keyframe poses
+  surroundingKeyframeSearchRadius: 40.0         # meters, within n meters scan-to-map optimization (when loop closure disabled)
+
+  # Loop closure
+  loopClosureEnableFlag: false
+  loopClosureFrequency: 1.0                     # Hz, regulate loop closure constraint add frequency
+  surroundingKeyframeSize: 30                   # submap size (when loop closure enabled)
+  historyKeyframeSearchRadius: 25.0             # meters, key frame that is within n meters from current pose will be considerd for loop closure
+  historyKeyframeSearchTimeDiff: 25.0           # seconds, key frame that is n seconds older will be considered for loop closure
+  historyKeyframeSearchNum: 25                  # number of hostory key frames will be fused into a submap for loop closure
+  historyKeyframeFitnessScore: 0.9              # icp threshold, the smaller the better alignment
+
+  # Visualization
+  globalMapVisualizationSearchRadius: 1000.0    # meters, global map visualization radius
+  globalMapVisualizationPoseDensity: 10.0       # meters, global map visualization keyframe density
+  globalMapVisualizationLeafSize: 0.5           # meters, global map visualization cloud density
+
+
+  # mapping
+  globalMapLeafSize: 1.0                        # saved map voxgrid size
+
+save_flag: true
+
+# patchworkpp:
+
+sensor_height: 1.723
+
+mode: "czm"
+verbose: false   # To check effect of uprightness/elevation/flatness
+visualize: true  # Ground Likelihood Estimation is visualized
+
+# Ground Plane Fitting parameters
+num_iter: 3             # Number of iterations for ground plane estimation using PCA.
+num_lpr: 20             # Maximum number of points to be selected as lowest points representative.
+num_min_pts: 10         # Minimum number of points to be estimated as ground plane in each patch.
+th_seeds: 0.3           # threshold for lowest point representatives using in initial seeds selection of ground points.
+th_dist: 0.125          # threshold for thickenss of ground.
+th_seeds_v: 0.25        # threshold for lowest point representatives using in initial seeds selection of vertical structural points.
+th_dist_v: 0.1          # threshold for thickenss of vertical structure.
+max_r: 80.0             # max_range of ground estimation area
+min_r: 2.7              # min_range of ground estimation area
+uprightness_thr: 0.707  # threshold of uprightness using in Ground Likelihood Estimation(GLE). Please refer paper for more information about GLE.
+
+adaptive_seed_selection_margin: -1.2 # The points below the adaptive_seed_selection_margin * sensor_height are filtered
+czm:
+  num_zones: 4
+  num_sectors_each_zone: [16, 32, 54, 32]
+  mum_rings_each_zone: [2, 4, 4, 4]
+  elevation_thresholds:  [0.0, 0.0, 0.0, 0.0] # threshold of elevation for each ring using in GLE. Those values are updated adaptively.
+  flatness_thresholds:  [0.0, 0.0, 0.0, 0.0]  # threshold of flatness for each ring using in GLE. Those values are updated adaptively.
+
+enable_RNR : true
+enable_RVPF : true
+enable_TGR : true
+
+RNR_ver_angle_thr : -15.0 # Noise points vertical angle threshold. Downward rays of LiDAR are more likely to generate severe noise points.
+RNR_intensity_thr : 0.2   # Noise points intensity threshold. The reflected points have relatively small intensity than others.
