@@ -1,0 +1,11 @@
+.git
+.vscode
+**/.DS_Store
+**/__pycache__
+**/build
+**/devel
+**/log
+Users
+数据
+数据.zip
+docker/output

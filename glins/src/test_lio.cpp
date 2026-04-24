@@ -19,14 +19,21 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "lio");
 
-    string GPSfile = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/test.pos";
     string bagpath;
     string imu_topic;
     string lidar_topic;
+    string output_path;
+    int gps_week;
+    double start_sec;
+    double end_sec;
     bool useRoslaunch = false;
     ros::NodeHandle nh("~");
     nh.getParam("useRoslaunch", useRoslaunch);
-    if (!useRoslaunch && argv[1] && argv[2] && argv[3])
+    nh.param<int>("gps_week", gps_week, 2350);
+    nh.param<double>("start_sec", start_sec, 117500.0);
+    nh.param<double>("end_sec", end_sec, 118300.0);
+    nh.param<std::string>("output_path", output_path, "/output/total.pos");
+    if (!useRoslaunch && argc >= 4)
     {
         bagpath = argv[1];
         imu_topic = argv[2];
@@ -37,6 +44,11 @@ int main(int argc, char** argv)
         nh.getParam("bagpath", bagpath);
         nh.getParam("imu_topic", imu_topic);
         nh.getParam("lidar_topic", lidar_topic);
+    }
+    if (bagpath.empty() || imu_topic.empty() || lidar_topic.empty())
+    {
+        ROS_ERROR("Usage: glins_test_lio <bagpath> <imu_topic> <lidar_topic>, or set private ROS params.");
+        return 1;
     }
 
     rosbag::Bag bag;
@@ -58,8 +70,8 @@ int main(int argc, char** argv)
     // gtime_t ts = gpst2time(2129,181347);
     // gtime_t te = gpst2time(2129,182154);
 
-    gtime_t ts = gpst2time(2350, 117500);///117500
-    gtime_t te = gpst2time(2350, 118300);
+    gtime_t ts = gpst2time(gps_week, start_sec);
+    gtime_t te = gpst2time(gps_week, end_sec);
 
     // 20250120_3
     // gtime_t ts = gpst2time(2350, 120671);//120562);120710 120671
@@ -135,7 +147,7 @@ int main(int argc, char** argv)
 
     visualizeMapThread.detach();
 
-    MO.savePath("/mnt/i/20240129/total.pos");
+    MO.savePath(output_path);
 
     MO.saveMapService();
 

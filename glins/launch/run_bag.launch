@@ -1,0 +1,28 @@
+<launch>
+    <arg name="params" default="$(find glins)/config/params_HDL_32.yaml"/>
+    <arg name="bagpath" default="/data/lidar_imu_backup.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="lidar_topic" default="/velodyne_points"/>
+    <arg name="gps_week" default="2350"/>
+    <arg name="start_sec" default="117500"/>
+    <arg name="end_sec" default="118300"/>
+    <arg name="output_path" default="/output/total.pos"/>
+
+    <param name="use_sim_time" value="true"/>
+    <rosparam file="$(arg params)" command="load"/>
+
+    <param name="saveDirectory" type="string" value="/output/"/>
+    <param name="configDirectory" type="string" value="$(find glins)/config/"/>
+    <param name="sequence" type="string" value="MAP"/>
+
+    <node pkg="glins" type="glins_test_lio" name="glins_test_lio" output="screen">
+        <param name="useRoslaunch" value="true" type="bool"/>
+        <param name="bagpath" value="$(arg bagpath)" type="string"/>
+        <param name="imu_topic" value="$(arg imu_topic)" type="string"/>
+        <param name="lidar_topic" value="$(arg lidar_topic)" type="string"/>
+        <param name="gps_week" value="$(arg gps_week)" type="int"/>
+        <param name="start_sec" value="$(arg start_sec)" type="double"/>
+        <param name="end_sec" value="$(arg end_sec)" type="double"/>
+        <param name="output_path" value="$(arg output_path)" type="string"/>
+    </node>
+</launch>
