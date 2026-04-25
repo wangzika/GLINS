@@ -1,0 +1,9 @@
+glins:
+  # Carrier debug mode without NHC:
+  # - keep pseudorange + carrier factors
+  # - keep integer ambiguity fixing
+  # - disable NHC to isolate whether NHC is part of the instability
+  useObs: true
+  useCarrier: true
+  useNHC: false
+  useAmbFix: true

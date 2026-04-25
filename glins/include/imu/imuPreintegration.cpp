@@ -270,10 +270,17 @@ void IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
         }
         else
         {
+            bool allowCarrierTemporalLink = true;
+            if (useCarrier && lastGNSSepoch > 0 && !optimizer.valueExists(N(lastGNSSepoch)))
+            {
+                allowCarrierTemporalLink = false;
+                container.reset_last_ar_index();
+                ROS_WARN("carrier temporal link disabled at key %d because N(%d) is not available in optimizer", key, lastGNSSepoch);
+            }
             npr = container.addDDPsrFactorENU(&graphFactors, &graphValues, key);
             if (useCarrier)
             {
-                nb = container.addDDCpFactorENU(&graphFactors, &graphValues, key, lastGNSSepoch);
+                nb = container.addDDCpFactorENU(&graphFactors, &graphValues, key, lastGNSSepoch, allowCarrierTemporalLink);
             }
             ndop = container.addSDDopFactorENU(&graphFactors, &graphValues, key, lastGNSSepoch); //|| ndop < 6
             if (debugGps)
@@ -848,7 +855,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     static Pose3 sol_pos;
     sol_pos = result.at<gtsam::Pose3>(X(key));
     posCovariance = optimizer.marginalCovariance(X(key));
-    if (useGPS && useObs && useCarrier && GNSSEnable)
+    if (useGPS && useObs && useCarrier && useAmbFix && GNSSEnable)
     {
         state = container.ambiguityResolve(optimizer, result, key, posCovariance, sol_pos);
     }

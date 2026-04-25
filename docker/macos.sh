@@ -27,6 +27,11 @@ Usage:
   ./docker/macos.sh build
   ./docker/macos.sh shell
   ./docker/macos.sh bag [roslaunch args...]
+  ./docker/macos.sh bag-advanced [roslaunch args...]
+  ./docker/macos.sh bag-full [roslaunch args...]
+  ./docker/macos.sh bag-carrier-float [roslaunch args...]
+  ./docker/macos.sh bag-carrier-no-nhc [roslaunch args...]
+  ./docker/macos.sh bag-full --no-build [roslaunch args...]
   ./docker/macos.sh gui [roslaunch args...]
   ./docker/macos.sh desktop
   ./docker/macos.sh gui-web [roslaunch args...]
@@ -35,6 +40,11 @@ Examples:
   ./docker/macos.sh build
   ./docker/macos.sh shell
   ./docker/macos.sh bag bagpath:=/data/demo.bag imu_topic:=/imu/data lidar_topic:=/velodyne_points
+  ./docker/macos.sh bag-advanced bagpath:=/data/lidar_imu.bag
+  ./docker/macos.sh bag-full bagpath:=/data/lidar_imu.bag
+  ./docker/macos.sh bag-carrier-float bagpath:=/data/lidar_imu.bag
+  ./docker/macos.sh bag-carrier-no-nhc bagpath:=/data/lidar_imu.bag
+  ./docker/macos.sh bag-full --no-build bagpath:=/data/lidar_imu.bag
   ./docker/macos.sh gui
   ./docker/macos.sh desktop
   ./docker/macos.sh gui-web bagpath:=/data/lidar_imu.bag
@@ -46,29 +56,98 @@ if [ $# -gt 0 ]; then
   shift
 fi
 
+passthrough_args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-build)
+      export GLINS_AUTOBUILD=0
+      shift
+      ;;
+    --build)
+      export GLINS_AUTOBUILD=1
+      shift
+      ;;
+    *)
+      passthrough_args+=("$1")
+      shift
+      ;;
+  esac
+done
+
 case "${cmd}" in
   build)
     docker compose build
     ;;
   shell)
-    docker compose run --rm glins bash "$@"
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins bash "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins bash
+    fi
     ;;
   bag)
-    docker compose run --rm glins roslaunch glins run_bag.launch "$@"
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins roslaunch glins run_bag.launch "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins roslaunch glins run_bag.launch
+    fi
+    ;;
+  bag-advanced)
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins roslaunch glins run_bag_advanced.launch "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins roslaunch glins run_bag_advanced.launch
+    fi
+    ;;
+  bag-full)
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins roslaunch glins run_bag_full.launch "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins roslaunch glins run_bag_full.launch
+    fi
+    ;;
+  bag-carrier-float)
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins roslaunch glins run_bag_carrier_float.launch "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins roslaunch glins run_bag_carrier_float.launch
+    fi
+    ;;
+  bag-carrier-no-nhc)
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins roslaunch glins run_bag_carrier_no_nhc.launch "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins roslaunch glins run_bag_carrier_no_nhc.launch
+    fi
     ;;
   gui)
-    docker compose run --rm glins roslaunch glins run_bag.launch \
-      rviz:=true robot_state_publisher:=true "$@"
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --rm glins roslaunch glins run_bag.launch \
+        rviz:=true robot_state_publisher:=true "${passthrough_args[@]}"
+    else
+      docker compose run --rm glins roslaunch glins run_bag.launch \
+        rviz:=true robot_state_publisher:=true
+    fi
     ;;
   desktop)
     echo "Open http://localhost:${NOVNC_PORT:-6080}/vnc.html in your browser."
-    docker compose run --service-ports --rm glins /usr/local/bin/start-desktop.sh "$@"
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --service-ports --rm glins /usr/local/bin/start-desktop.sh "${passthrough_args[@]}"
+    else
+      docker compose run --service-ports --rm glins /usr/local/bin/start-desktop.sh
+    fi
     ;;
   gui-web)
     echo "Open http://localhost:${NOVNC_PORT:-6080}/vnc.html in your browser."
-    docker compose run --service-ports --rm glins \
-      /usr/local/bin/start-desktop.sh \
-      roslaunch glins run_bag.launch rviz:=true robot_state_publisher:=true "$@"
+    if [ ${#passthrough_args[@]} -gt 0 ]; then
+      docker compose run --service-ports --rm glins \
+        /usr/local/bin/start-desktop.sh \
+        roslaunch glins run_bag.launch rviz:=true robot_state_publisher:=true "${passthrough_args[@]}"
+    else
+      docker compose run --service-ports --rm glins \
+        /usr/local/bin/start-desktop.sh \
+        roslaunch glins run_bag.launch rviz:=true robot_state_publisher:=true
+    fi
     ;;
   *)
     usage

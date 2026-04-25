@@ -1,0 +1,9 @@
+glins:
+  # Full mode:
+  # - enable GNSS observation factors
+  # - enable carrier phase factors
+  # - enable NHC constraint
+  # This mode is the most complete, but also the least stable.
+  useObs: true
+  useCarrier: true
+  useNHC: true

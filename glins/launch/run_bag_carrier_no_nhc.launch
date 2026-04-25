@@ -1,0 +1,32 @@
+<launch>
+    <arg name="bagpath" default="/data/lidar_imu.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="lidar_topic" default="/velodyne_points"/>
+    <arg name="gps_week" default="2299"/>
+    <arg name="start_sec" default="111965"/>
+    <arg name="end_sec" default="112280"/>
+    <arg name="output_path" default="/output/total.pos"/>
+    <arg name="rtklib_config_path" default="$(find glins)/config/conf/20240129.conf"/>
+    <arg name="fgo_path" default="/output/rtklib_fgo.pos"/>
+    <arg name="rviz" default="false"/>
+    <arg name="robot_state_publisher" default="false"/>
+    <arg name="rviz_config" default="$(find glins)/launch/include/config/vlp.rviz"/>
+
+    <include file="$(find glins)/launch/run_bag.launch">
+        <arg name="params" value="$(find glins)/config/params_20240129.yaml"/>
+        <arg name="use_params_override" value="true"/>
+        <arg name="params_override" value="$(find glins)/config/params_20240129_carrier_no_nhc.yaml"/>
+        <arg name="bagpath" value="$(arg bagpath)"/>
+        <arg name="imu_topic" value="$(arg imu_topic)"/>
+        <arg name="lidar_topic" value="$(arg lidar_topic)"/>
+        <arg name="gps_week" value="$(arg gps_week)"/>
+        <arg name="start_sec" value="$(arg start_sec)"/>
+        <arg name="end_sec" value="$(arg end_sec)"/>
+        <arg name="output_path" value="$(arg output_path)"/>
+        <arg name="rtklib_config_path" value="$(arg rtklib_config_path)"/>
+        <arg name="fgo_path" value="$(arg fgo_path)"/>
+        <arg name="rviz" value="$(arg rviz)"/>
+        <arg name="robot_state_publisher" value="$(arg robot_state_publisher)"/>
+        <arg name="rviz_config" value="$(arg rviz_config)"/>
+    </include>
+</launch>

@@ -1,0 +1,8 @@
+glins:
+  # Advanced mode:
+  # - enable GNSS observation factors
+  # - keep carrier phase off for better stability on macOS/Docker validation
+  # - enable NHC constraint
+  useObs: true
+  useCarrier: false
+  useNHC: true

@@ -94,6 +94,7 @@ public:
     float poseCovThreshold;
     bool useObs;
     bool useCarrier;
+    bool useAmbFix;
 
     // debug setting
     bool debugLidarTimestamp;
@@ -237,6 +238,7 @@ public:
         nh.param<float>("glins/poseCovThreshold", poseCovThreshold, 25.0);
         nh.param<bool>("glins/useObs", useObs, false);
         nh.param<bool>("glins/useCarrier", useCarrier, false);
+        nh.param<bool>("glins/useAmbFix", useAmbFix, true);
 
         nh.param<bool>("glins/debugLidarTimestamp", debugLidarTimestamp, false);
         nh.param<bool>("glins/debugImu", debugImu, false);

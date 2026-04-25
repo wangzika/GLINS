@@ -1,0 +1,9 @@
+glins:
+  # Carrier-float debug mode:
+  # - keep pseudorange + carrier factors
+  # - keep NHC
+  # - disable integer ambiguity fixing
+  useObs: true
+  useCarrier: true
+  useNHC: true
+  useAmbFix: false

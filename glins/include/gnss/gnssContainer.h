@@ -335,11 +335,14 @@ public:
         return npr;
     }
 
-    int addDDCpFactorENU(gtsam::NonlinearFactorGraph* graphFactors, gtsam::Values* graphValues, int key, int lastkey)
+    int addDDCpFactorENU(gtsam::NonlinearFactorGraph* graphFactors, gtsam::Values* graphValues, int key, int lastkey, bool allow_temporal_link = true)
     {
         int ncp, ns;
         ncp = 0;
         ns = gnss_info.SD_Infos.size();
+        int carrier_outlier_count = 0;
+        int carrier_factor_count = 0;
+        gtsam::NonlinearFactorGraph carrierGraphFactors;
         int slip, sat, reset, nf = NF(&rtk.opt);
         vector<int> sats;
         vector<int> freqs;
@@ -348,6 +351,10 @@ public:
         compress_ar.setZero();
         map<int, int> ar_index;
         if (gnss_info.amb.empty()) return 0;
+        if (!allow_temporal_link)
+        {
+            last_ar_index.clear();
+        }
         for (int n = 0; n < MAXSAT; ++n)
         {
             for (int f = 0; f < 3; ++f)
@@ -484,6 +491,7 @@ public:
                     double residual = fabs(dd_cp_factor.debugEvaluateError(graphValues->at<Pose3>(X(key)), tmp_amb)[0]);
                     if (fabs(residual) > (prcopt.maxinno[0] * 0.1))
                     {
+                        carrier_outlier_count++;
                         rtk.ssat[satj - 1].vsat[f] = 0;
                         ROS_WARN("phase residual out of range %.3lf\n", residual);
                         continue;
@@ -502,7 +510,7 @@ public:
                     if (systemInitialized)
                     {
                         double delta_amb = AmbFullArray[f * MAXSAT + satj - 1] - gnss_info.amb[f * MAXSAT + satj - 1];
-                        if ((!(slip & LLI_SLIP)) && last_ar_index.count(f * MAXSAT + satj) != 0 && fabs(delta_amb) < 1 && prcopt.modear > 2)
+                        if (allow_temporal_link && (!(slip & LLI_SLIP)) && last_ar_index.count(f * MAXSAT + satj) != 0 && fabs(delta_amb) < 1 && prcopt.modear > 2)
                         {
                             sats.push_back(gnss_info.SD_Infos[j].Mea_Rover.sat);
                             freqs.push_back(f);
@@ -510,7 +518,7 @@ public:
                         }
                         else
                         {
-                            graphFactors->add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
+                            carrierGraphFactors.add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
                                 noiseModel::Diagonal::Sigmas(
                                     Vector(1).setConstant(30))));
                         }
@@ -525,7 +533,7 @@ public:
                     if (systemInitialized)
                     {
                         double delta_amb = AmbFullArray[f * MAXSAT + Info_Master.Mea_Rover.sat - 1] - gnss_info.amb[f * MAXSAT + Info_Master.Mea_Rover.sat - 1];
-                        if (last_ar_index.count(f * MAXSAT + Info_Master.Mea_Rover.sat) != 0 && fabs(delta_amb) < 1 && prcopt.modear > 2)
+                        if (allow_temporal_link && last_ar_index.count(f * MAXSAT + Info_Master.Mea_Rover.sat) != 0 && fabs(delta_amb) < 1 && prcopt.modear > 2)
                         {
                             sats.push_back(Info_Master.Mea_Rover.sat);
                             freqs.push_back(f);
@@ -533,7 +541,7 @@ public:
                         }
                         else
                         {
-                            graphFactors->add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
+                            carrierGraphFactors.add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
                                 noiseModel::Diagonal::Sigmas(
                                     Vector(1).setConstant(30))));
                         }
@@ -546,32 +554,66 @@ public:
                     {
                         GNSSDDCpFactorCompress_ENU_lever::shared_ptr dd_cp_factor(new GNSSDDCpFactorCompress_ENU_lever(X(key), N(key), T(key), Info_Master, Infos_Else, part_ar_index, prcopt,
                             f, false, lla_origin, huber));
-                        graphFactors->add(dd_cp_factor);
+                        carrierGraphFactors.add(dd_cp_factor);
+                        carrier_factor_count++;
                     }
                     else
                     {
                         GNSSDDCpFactorCompress_ENU::shared_ptr dd_cp_factor(new GNSSDDCpFactorCompress_ENU(X(key), N(key), Info_Master, Infos_Else, part_ar_index, prcopt,
                             f, false, lla_origin, extGPS, extRot.transpose(), huber));
-                        graphFactors->add(dd_cp_factor);
+                        carrierGraphFactors.add(dd_cp_factor);
+                        carrier_factor_count++;
                     }
 
                     ar_index.insert(part_ar_index.begin(), part_ar_index.end());
                 }
             }
         }
-        if (!sats.empty() && !freqs.empty() && prcopt.modear > 2)
+        if (allow_temporal_link && !sats.empty() && !freqs.empty() && prcopt.modear > 2)
         { // fgo.num_factor[1]!=0
             noiseModel::Base::shared_ptr noise = noiseModel::Diagonal::Sigmas(Vector(sats.size()).setConstant(1e-3));
             noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Huber::Create(1.0), noise);
 
             GNSSAmbConstraintCompress::shared_ptr amb_constraint_factor(new GNSSAmbConstraintCompress(N(key), N(lastkey), 0.0, sats, freqs, ar_index, last_ar_index,
                 noise));
-            graphFactors->add(amb_constraint_factor);
+            carrierGraphFactors.add(amb_constraint_factor);
         }
         compress_ar.conservativeResize(ncp);
+        if (carrier_outlier_count > 0)
+        {
+            ROS_WARN("skip carrier factors at key %d because %d phase observations were rejected as outliers", key, carrier_outlier_count);
+            last_ar_index.clear();
+            return 0;
+        }
+        if (ncp < 2 || carrier_factor_count < 2)
+        {
+            ROS_WARN("skip carrier factors at key %d because ambiguity block is too small (ncp=%d carrier_factors=%d)", key, ncp, carrier_factor_count);
+            last_ar_index.clear();
+            return 0;
+        }
         if (ncp > 0)
         {
             graphValues->insert(N(key), compress_ar);
+
+            // Keep the ambiguity block numerically anchored after it is accepted
+            // into the graph. A very weak prior was still allowing accepted
+            // carrier epochs to become ill-conditioned around N(key), so use a
+            // stabilization prior on the whole ambiguity block with the same
+            // scale as the existing per-entry phase priors.
+            gtsam::Matrix weakPriorNoiseMatrix = gtsam::Matrix::Identity(compress_ar.size(), compress_ar.size()) * 900;
+            carrierGraphFactors.add(PriorFactor<Vector>(N(key), (Vector)compress_ar,
+                noiseModel::Gaussian::Covariance(weakPriorNoiseMatrix)));
+
+            if (carrier_outlier_count > 0)
+            {
+                ROS_WARN("carrier ambiguity block at key %d uses weak regularization after rejecting %d phase observations", key, carrier_outlier_count);
+            }
+            ROS_INFO("carrier factors accepted at key %d (ncp=%d carrier_factors=%d temporal_links=%zu)", key, ncp, carrier_factor_count, sats.size());
+            graphFactors->add(carrierGraphFactors);
+        }
+        else if (!allow_temporal_link)
+        {
+            ROS_WARN("skip carrier ambiguity state at key %d because previous ambiguity state is unavailable", key);
         }
         //        noiseModel::Diagonal::Sigmas(Vector(compress_ar.size()).setConstant(30)
         if (!systemInitialized && compress_ar.size() > 0)
@@ -579,6 +621,10 @@ public:
             gtsam::Matrix priorNoiseMatrix = gtsam::Matrix::Identity(compress_ar.size(), compress_ar.size()) * 900;
             graphFactors->add(PriorFactor<Vector>(N(key), (Vector)compress_ar,
                 noiseModel::Gaussian::Covariance(priorNoiseMatrix)));
+        }
+        if (compress_ar.size() > 0 && carrier_factor_count == 0)
+        {
+            ROS_WARN("carrier ambiguity state inserted at key %d without valid carrier factors", key);
         }
         last_ar_index = ar_index;
         return ncp;
