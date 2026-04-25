@@ -147,8 +147,7 @@ extern double robust(double* x, double* H, double* v, double* P, double* R, int 
     matcpy(R_inv, R, m, m);
     if ((info = matinv(R_inv, m)))
     {
-        printf("ERROR: matinv(R)\n");
-        system("pause");
+        fprintf(stderr, "ERROR: matinv(R)\n");
     }
     //    matprint(R_inv,m,m,10,4);
     //    printf("\n");
@@ -211,8 +210,7 @@ extern double robust(double* x, double* H, double* v, double* P, double* R, int 
     //    matprint(RR,m,m,10,4);
     if ((info = matinv(RR, m)))
     {
-        printf("ERROR: matinv(P_p)\n");
-        system("pause");
+        fprintf(stderr, "ERROR: matinv(P_p)\n");
     }
     //    fflush(lossfp);
     free(Qv);free(P_p); free(R_inv);

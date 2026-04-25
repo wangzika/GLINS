@@ -22,6 +22,9 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Gflags)
 find_package(Glog)
 find_package(Ceres REQUIRED)
+find_package(Threads REQUIRED)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
 # find_package(OpenCV REQUIRED QUIET)
 
 include_directories(
@@ -70,4 +73,20 @@ aux_source_directory(./src/rcv RTKLIB_RCV)
 add_library(rtklib STATIC ${RTKLIB_SRCS} ${RTKLIB_RCV})
 add_dependencies(rtklib ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_include_directories(rtklib PRIVATE include)
-target_link_libraries(rtklib libm.so libpthread.so blas lapack gflags ${catkin_LIBRARIES})
+
+set(RTKLIB_LINK_LIBS
+    Threads::Threads
+    ${BLAS_LIBRARIES}
+    ${LAPACK_LIBRARIES}
+    ${catkin_LIBRARIES}
+)
+
+if (TARGET gflags)
+    list(APPEND RTKLIB_LINK_LIBS gflags)
+elseif (GFLAGS_LIBRARIES)
+    list(APPEND RTKLIB_LINK_LIBS ${GFLAGS_LIBRARIES})
+else()
+    list(APPEND RTKLIB_LINK_LIBS gflags)
+endif()
+
+target_link_libraries(rtklib ${RTKLIB_LINK_LIBS})

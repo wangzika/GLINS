@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
         roscpp
         rospy
         cv_bridge
+        jsk_recognition_msgs
         # pcl library
         pcl_conversions
         # msgs
@@ -21,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
         sensor_msgs
         geometry_msgs
         nav_msgs
+        jsk_recognition_msgs
         message_generation
         visualization_msgs
         rosbag
@@ -30,7 +32,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Gflags)
 find_package(Glog)
 find_package(Ceres REQUIRED)
-find_package(OpenMP REQUIRED)
+find_package(OpenMP)
 find_package(PCL REQUIRED QUIET)
 find_package(OpenCV REQUIRED QUIET)
 find_package(GTSAM REQUIRED QUIET)
@@ -94,6 +96,7 @@ catkin_package(
         nav_msgs
         geometry_msgs
         sensor_msgs
+        jsk_recognition_msgs
         message_runtime
         message_generation
         visualization_msgs
@@ -103,14 +106,27 @@ catkin_package(
 ## Build ##
 ###########
 
+set(GLINS_PLATFORM_LIBS)
+
+if (OpenMP_CXX_FOUND)
+    list(APPEND GLINS_PLATFORM_LIBS OpenMP::OpenMP_CXX)
+endif()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_library(DW_LIBRARY dw)
+    if (DW_LIBRARY)
+        list(APPEND GLINS_PLATFORM_LIBS ${DW_LIBRARY})
+    endif()
+endif()
+
 add_executable(${PROJECT_NAME}_test_rtk src/test_rtk.cpp)
 add_dependencies(${PROJECT_NAME}_test_rtk ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(${PROJECT_NAME}_test_rtk ${catkin_LIBRARIES} gflags gtsam dw)
+target_link_libraries(${PROJECT_NAME}_test_rtk ${catkin_LIBRARIES} gflags gtsam ${GLINS_PLATFORM_LIBS})
 
 add_executable(${PROJECT_NAME}_test_gins src/test_gins.cpp)
 add_dependencies(${PROJECT_NAME}_test_gins ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_include_directories(${PROJECT_NAME}_test_gins PUBLIC include)
-target_link_libraries(${PROJECT_NAME}_test_gins ${catkin_LIBRARIES} gflags gtsam dw)
+target_link_libraries(${PROJECT_NAME}_test_gins ${catkin_LIBRARIES} gflags gtsam ${GLINS_PLATFORM_LIBS})
 
 file(GLOB lio_files
         "include/imu/imuPreintegration.cpp"
@@ -121,10 +137,8 @@ file(GLOB lio_files
 add_library(lio ${lio_files})
 add_dependencies(lio ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 #target_include_directories(lio PUBLIC include)
-target_link_libraries(lio ${catkin_LIBRARIES} gflags gtsam OpenMP::OpenMP_CXX dw ${CERES_LIBRARIES})
+target_link_libraries(lio ${catkin_LIBRARIES} gflags gtsam ${GLINS_PLATFORM_LIBS} ${CERES_LIBRARIES})
 # target_precompile_headers(lio PRIVATE ./ThirdParty/rtklib/include/gnss_tools.h)
 add_executable(${PROJECT_NAME}_test_lio src/test_lio.cpp)
 add_dependencies(${PROJECT_NAME}_test_lio ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(${PROJECT_NAME}_test_lio ${catkin_LIBRARIES}  gflags gtsam lio dw)
-
-
+target_link_libraries(${PROJECT_NAME}_test_lio ${catkin_LIBRARIES}  gflags gtsam lio ${GLINS_PLATFORM_LIBS})

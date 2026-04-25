@@ -8,3 +8,7 @@ data_test/
 *.ply
 *.obs
 *.rnx
+docker/build/
+docker/devel/
+docker/logs/
+docker/output/

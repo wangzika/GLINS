@@ -359,8 +359,8 @@ public:
 
         nh.param<float>("glins/globalMapLeafSize", globalMapLeafSize, 1.0);
 
-        nh.param<string>("glins/rtklibConfigPath", rtklibConfigPath, "/home/wangchuji/catkins_lidar/GLINS/config/conf/Urban_medium.conf");
-        nh.param<string>("glins/fgoPath", fgoPath, "/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/GNSS_INS_Data/urban/rtklib_fgo.pos");
+        nh.param<string>("glins/rtklibConfigPath", rtklibConfigPath, "/catkin_ws/src/glins/config/conf/20240129.conf");
+        nh.param<string>("glins/fgoPath", fgoPath, "/output/rtklib_fgo.pos");
         usleep(100);
     }
 

@@ -33,7 +33,13 @@ using gtsam::symbol_shorthand::T;
 using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using gtsam::symbol_shorthand::X; // Pose3 (x,y,z,r,p,y)
 typedef pair<nav_msgs::Odometry, rtklib::GNSS_Info> GNSSPose;
+#ifndef BACKWARD_HAS_DW
+#if defined(__linux__)
 #define BACKWARD_HAS_DW 1
+#else
+#define BACKWARD_HAS_DW 0
+#endif
+#endif
 #include "backward.hpp"
 namespace backward
 {

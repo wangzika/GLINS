@@ -9,7 +9,13 @@
 #include "mapping/mapOptmizationGps.h"
 #include "rosbag/bag_player.h"
 #include "rosgraph_msgs/Clock.h"
+#ifndef BACKWARD_HAS_DW
+#if defined(__linux__)
 #define BACKWARD_HAS_DW 1
+#else
+#define BACKWARD_HAS_DW 0
+#endif
+#endif
 #include "backward.hpp"
 namespace backward
 {
@@ -29,9 +35,9 @@ int main(int argc, char** argv)
     bool useRoslaunch = false;
     ros::NodeHandle nh("~");
     nh.getParam("useRoslaunch", useRoslaunch);
-    nh.param<int>("gps_week", gps_week, 2350);
-    nh.param<double>("start_sec", start_sec, 117500.0);
-    nh.param<double>("end_sec", end_sec, 118300.0);
+    nh.param<int>("gps_week", gps_week, 2299);
+    nh.param<double>("start_sec", start_sec, 111965.0);
+    nh.param<double>("end_sec", end_sec, 112280.0);
     nh.param<std::string>("output_path", output_path, "/output/total.pos");
     if (!useRoslaunch && argc >= 4)
     {

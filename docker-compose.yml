@@ -2,17 +2,35 @@ services:
   glins:
     build:
       context: .
+      args:
+        GTSAM_BUILD_JOBS: ${GTSAM_BUILD_JOBS:-2}
     image: glins:noetic
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     working_dir: /catkin_ws
     stdin_open: true
     tty: true
     environment:
       ROS_MASTER_URI: http://localhost:11311
       ROS_HOSTNAME: localhost
+      DISPLAY: ${DISPLAY:-host.docker.internal:0}
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GLINS_AUTOBUILD: ${GLINS_AUTOBUILD:-1}
+      GLINS_BUILD_JOBS: ${GLINS_BUILD_JOBS:-2}
+      GLINS_BUILD_LOAD: ${GLINS_BUILD_LOAD:-2}
+      NOVNC_DISPLAY: ${NOVNC_DISPLAY:-:1}
+      VNC_PORT: ${VNC_PORT:-5900}
+      NOVNC_PORT: ${NOVNC_PORT:-6080}
+      VNC_RESOLUTION: ${VNC_RESOLUTION:-1600x900x24}
       QT_X11_NO_MITSHM: "1"
+    ports:
+      - "${NOVNC_PORT:-6080}:6080"
+      - "${VNC_PORT:-5900}:5900"
     volumes:
       - ./glins:/catkin_ws/src/glins
       - ./rtklib:/catkin_ws/src/rtklib
+      - ./docker/build:/catkin_ws/build
+      - ./docker/devel:/catkin_ws/devel
+      - ./docker/logs:/catkin_ws/logs
       - ./数据:/data
       - ./docker/output:/output
     command: bash
