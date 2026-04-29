@@ -232,19 +232,40 @@ void IMUPreintegration::setStartTime(gtime_t& t)
 
 void IMUPreintegration::resetOptimization()
 {
+    // 配置 ISAM2 增量优化器参数。
     gtsam::ISAM2Params optParameters;
-    optParameters.optimizationParams = ISAM2DoglegParams(1.0, 1e-10, DoglegOptimizerImpl::TrustRegionAdaptationMode::SEARCH_EACH_ITERATION);
+
+    // 使用 Dogleg 作为非线性步长策略：
+    // - 1.0: 初始 trust region 半径
+    // - 1e-10: Dogleg 收敛/数值阈值
+    // - SEARCH_EACH_ITERATION: 每轮都重新搜索并调整信赖域大小
+    optParameters.optimizationParams =
+        ISAM2DoglegParams(1.0, 1e-10, DoglegOptimizerImpl::TrustRegionAdaptationMode::SEARCH_EACH_ITERATION);
+
+    // 变量增量超过这个阈值时，ISAM2 会重新线性化相关因子。
     optParameters.relinearizeThreshold = 0.01;
+
+    // 每次 update 都检查一次是否需要重线性化。
     optParameters.relinearizeSkip = 1;
+
+    // 线性子问题采用 Cholesky 分解求解，速度较快，但对病态系统更敏感。
     optParameters.factorization = gtsam::ISAM2Params::CHOLESKY;
+
+    // 允许 ISAM2 回收未使用的因子槽位，避免长期运行时内部因子索引不断膨胀。
     optParameters.findUnusedFactorSlots = true;
+
+    // 创建两套优化器：
+    // - optimizer: 主紧耦合图（IMU + Lidar + GNSS + carrier 等）
+    // - odomOptimizer: 仅里程计链的辅助优化器
     optimizer = gtsam::ISAM2(optParameters);
     odomOptimizer = gtsam::ISAM2(optParameters);
 
+    // 清空当前待加入主图/里程计图的因子缓存。
     gtsam::NonlinearFactorGraph newGraphFactors;
     graphFactors = newGraphFactors;
     odomGraphFactors = newGraphFactors;
 
+    // 清空当前待插入主图/里程计图的新状态初值缓存。
     gtsam::Values NewGraphValues;
     graphValues = NewGraphValues;
     odomGraphValues = NewGraphValues;
@@ -259,10 +280,10 @@ void IMUPreintegration::resetParams()
 
 void IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
 {
-    if (container.checkIsEmpty())
+    if (container.checkIsEmpty())// 没有可用的 GNSS 观测，直接返回。
         return;
 
-    if (container.syncObs(lastImuT_opt, 0.015))
+    if (container.syncObs(lastImuT_opt, 0.015))// 同步 GNSS 观测到当前 IMU 预积分的时间戳，允许最大时间差 15ms。
     {
         if (!useObs)
         {
@@ -423,21 +444,33 @@ void IMUPreintegration::addLidarFactor()
 
 void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& featureMsg)
 {
+    // 整个回调是 LIO/GNSS 紧耦合前端的主入口：
+    // 每来一帧 feature（即一帧经过预处理后的激光特征），就以该时刻为“校正时刻”
+    // 进行一次图优化，并把优化后的状态继续用于下一轮 IMU 传播。
     std::lock_guard<std::mutex> lock(mtx);
     TicToc t_opt;
     t_opt.tic();
     ROS_INFO("feature time: %.8lf", featureMsg->header.stamp.toSec());
+
+    // 保存当前帧特征消息，并把 ROS 点云消息转成 PCL 供后续 lidar 因子使用。
     featureInfo = *featureMsg;
     pcl::fromROSMsg(featureMsg->laserCloudCornerMatch, *cornercloudMatch);
     pcl::fromROSMsg(featureMsg->laserCloudSurfMatch, *surfcloudMatch);
     featureUpdate = true;
+
+    // lastgpstime 记录上一次 GNSS 对齐时刻，用于判断垂向变化等条件。
     static double lastgpstime = 0;
+
+    // GNSSEnable 表示“当前这个 feature 时刻附近是否存在可同步的 GNSS 观测”。
     volatile bool GNSSEnable = false;
+
+    // 当前这次优化对应的校正时刻，后面 IMU 预积分和 GNSS 对齐都以它为准。
     volatile double currentCorrectionTime = ROS_TIME(featureMsg);
     // make sure we have imu data to integrate
     if (imuQueOpt.empty())
         return;
 
+    // 从 lidar 里程计消息中取出当前帧的位姿观测。
     float p_x = featureMsg->laserOdom.pose.pose.position.x;
     float p_y = featureMsg->laserOdom.pose.pose.position.y;
     float p_z = featureMsg->laserOdom.pose.pose.position.z;
@@ -449,6 +482,10 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     gtsam::Pose3 lidarPose = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z),
         gtsam::Point3(p_x, p_y, p_z));
 
+    // nb / npr / ndop 分别记录：
+    // nb   : 载波相位相关的有效约束规模
+    // npr  : 双差伪距因子规模
+    // ndop : 多普勒因子规模
     int nb, npr, ndop;
     nb = 0;
     npr = 0;
@@ -457,9 +494,11 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     // 0. initialize system
     if (systemInitialized == false)
     {
+        // 初始化阶段只做一次：建立第 0 个状态节点，并加上初始先验。
         resetOptimization();
 
         // pop old IMU message
+        // 把当前校正时刻之前过老的 IMU 数据弹掉，避免初始化时预积分区间错误。
         while (!imuQueOpt.empty())
         {
             if (ROS_TIME(&imuQueOpt.front()) < currentCorrectionTime - delta_t)
@@ -471,24 +510,30 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
                 break;
         }
         // initial pose
+        // 用当前 lidar 估计位姿，结合 lidar->IMU 外参，得到第 0 帧 IMU 位姿。
         prevPose_ = lidarPose.compose(lidar2Imu);
         if (debugImu)
         {
             ROS_INFO("predict pose: %lf %lf %lf", prevPose_.translation().x(), prevPose_.translation().y(), prevPose_.translation().z());
         }
+
+        // 给第 0 帧位姿加先验，把因子图锚定到一个可优化的初始状态。
         gtsam::PriorFactor<gtsam::Pose3> priorPose(X(0), prevPose_, priorPoseNoise);
         graphFactors.add(priorPose);
         // initial velocity
+        // 初始化速度默认设为 0，并加速度先验。
         prevVel_ = gtsam::Vector3(0, 0, 0);
         gtsam::PriorFactor<gtsam::Vector3> priorVel(V(0), prevVel_, priorVelNoise);
         graphFactors.add(priorVel);
         // initial bias
+        // 初始化 IMU bias。这里使用一组经验初值，而不是完全零偏。
         prevBias_ = gtsam::imuBias::ConstantBias((gtsam::Vector(6)
             << 0.238860, -0.150600, 0.014712, -0.001496, -0.003197, 0.007483)
             .finished());
         gtsam::PriorFactor<gtsam::imuBias::ConstantBias> priorBias(B(0), prevBias_, priorBiasNoise);
         graphFactors.add(priorBias);
         // add values
+        // 因子图里的先验只是“约束”，这里还要给优化器提供第 0 帧状态的初值。
         graphValues.insert(X(0), prevPose_);
         graphValues.insert(V(0), prevVel_);
         graphValues.insert(B(0), prevBias_);
@@ -497,7 +542,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         {
             if (useGPS)
             {
-                // add gps factor
+                // 如果当前时刻恰好能同步到 GNSS，则初始化时就把 GNSS 因子一起加进去。
                 addGPSFactor(nb, npr, ndop);
             }
         }
@@ -516,21 +561,25 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         //     odomGraphValues.clear();
         // }
         // optimize once
+        // 用初始化先验（以及可能存在的 GNSS 因子）先优化一次，得到稳定的起始状态。
         optimizer.update(graphFactors, graphValues);
         graphFactors.resize(0);
         graphValues.clear();
 
         gtsam::Values result = optimizer.calculateEstimate();
+        // 把优化结果回写为当前系统状态，作为后续预积分和滑窗优化的起点。
         prevPose_ = result.at<gtsam::Pose3>(X(0));
         prevVel_ = result.at<gtsam::Vector3>(V(0));
         prevState_ = gtsam::NavState(prevPose_, prevVel_);
         prevBias_ = result.at<gtsam::imuBias::ConstantBias>(B(0));
         if (nb > 0)
         {
+            // 如果初始化阶段已经接入了载波状态，则同时保存第 0 帧 ambiguity。
             prevAmb_ = result.at<Vector>(N(0));
         }
         if (GNSSEnable)
         {
+            // 初始化阶段若有 GNSS，则建立 ENU 原点并输出一条初始 GNSS 结果。
             lla_origin = container.getOrigin();
             gpsPose = prevPose_.compose(gps2imu);
             posCovariance = optimizer.marginalCovariance(X(0));
@@ -542,6 +591,8 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
             writeGPSfile(curgtime, ecef, 6, fp);
             fflush(fp);
         }
+
+        // 初始化完成后，重置 IMU 预积分器，使其从“最新优化后的 bias”重新积分。
         imuIntegratorImu_->resetIntegrationAndSetBias(prevBias_);
         imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
         // {
@@ -557,12 +608,16 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         lastgpstime = currentCorrectionTime;
         lastKeyIndex = 0;
         gpsKeyQueue.push_back(0);
+
+        // 初始化结束后，下一次进入回调时就从 key=1 开始正常迭代。
         key = 1;
         systemInitialized = true;
         container.setSystemInitialized(systemInitialized);
         return;
     }
+
     // 1. integrate imu data and optimize
+    // 非初始化阶段：先把上次优化之后到当前校正时刻之间的 IMU 数据积分起来。
     while (!imuQueOpt.empty())
     {
         // pop and integrate imu data that is between two optimizations
@@ -578,14 +633,14 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
                     thisImu->linear_acceleration.z),
                 gtsam::Vector3(thisImu->angular_velocity.x, thisImu->angular_velocity.y,
                     thisImu->angular_velocity.z),
-                dt);
+                dt);// 把当前 IMU 数据积分到 IMU 预积分器里，后面会用这个预积分结果构造 IMU 因子。
             imuIntegratorOdo_->integrateMeasurement(
                 gtsam::Vector3(thisImu->linear_acceleration.x,
                     thisImu->linear_acceleration.y,
                     thisImu->linear_acceleration.z),
                 gtsam::Vector3(thisImu->angular_velocity.x, thisImu->angular_velocity.y,
                     thisImu->angular_velocity.z),
-                dt);
+                dt);// 同时也积分到里程计预积分器里，后面会用这个预积分结果构造里程计因子。
             lastImuT_opt = imuTime;
             imuQueOpt.pop_front();
         }
@@ -593,11 +648,13 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
             break;
     }
     // add imu factor to graph
+    // 由这段预积分结果构造 IMU 因子，连接 [key-1] 和 [key] 两个时刻的状态。
     const gtsam::PreintegratedImuMeasurements
         & preint_imu = dynamic_cast<const gtsam::PreintegratedImuMeasurements&>(*imuIntegratorOpt_);
     gtsam::ImuFactor imu_factor(X(key - 1), V(key - 1), X(key), V(key), B(key - 1), preint_imu);
     graphFactors.add(imu_factor);
     // add imu bias between factor
+    // 再加一个 bias 的随机游走约束，表达 bias 不会在相邻时刻发生剧烈跳变。
     graphFactors.add(gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>(B(key - 1),
         B(key),
         gtsam::imuBias::ConstantBias(),
@@ -610,13 +667,23 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
             noiseModel::Diagonal::Sigmas((Vector(6) << 0.01, 0.01, 0.01, 1, 1, 3).finished()));
 
     // insert predicted values
+    // 当前帧 lidar 位姿先转到 IMU 坐标系，后面既可作为先验，也可用于相对位姿约束。
     gtsam::Pose3 curPose = lidarPose.compose(lidar2Imu);
+
+    // 用“上一轮优化结果 + 当前 IMU 预积分”预测当前状态，作为本轮优化初值。
     gtsam::NavState propState_ = imuIntegratorOpt_->predict(prevState_, prevBias_);
-    gtsam::Pose3 delta_Pose = propState_.pose().between(curPose);
+    gtsam::Pose3 delta_Pose = propState_.pose().between(curPose);// delta_Pose: 当前 IMU 传播结果与 lidar 位姿之间的差异。
+
+    // isRelative: 当前 lidar 观测与 IMU 传播结果接近，说明当前帧更适合做相对约束。
     isRelative = fabs(delta_Pose.rotation().yaw() * 180 / M_PI) < 10 && delta_Pose.translation().head<2>().norm() < 2.0;
+
+    // delta_Pose1: 当前帧相对“上一关键帧”的位姿变化。
     gtsam::Pose3 delta_Pose1 = lastKeyPose.between(curPose);
+
+    // isStatic: 当前相对关键帧几乎没动，可考虑加入静止约束（ZUPT 等）。
     isStatic = delta_Pose1.translation().norm() < 0.02 && fabs(delta_Pose1.rotation().yaw() * 180 / M_PI) < 1.0;
-    if (false)
+    
+    if (false)// debugGps
     {
         gpsPose = propState_.pose().compose(gps2imu);
         Vector3 ecef = GNSS_Tools::enu2ecef(lla_origin, gpsPose.translation()); // gtools.ENU2ECEF(gpsPose.translation());
@@ -633,6 +700,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     }
     // if (isRelative || !isStatic)
     // {
+    // 把 IMU 传播得到的 pose / velocity 写成当前优化的初始值。
     graphValues.insert(X(key), propState_.pose());
     graphValues.insert(V(key), propState_.v());
     //     //        graphValues.insert(X(key), curPose);
@@ -655,6 +723,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     // }
     //    prevState_.pose().between(propState_.pose()).print();
 
+    // 当前 bias 初值默认延续上一轮优化结果。
     graphValues.insert(B(key), prevBias_);
 
     gtime_t te;
@@ -662,13 +731,14 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     te.sec = currentCorrectionTime - round(currentCorrectionTime);
     volatile double weeksec = time2gpst(te, NULL);
     // add GPS factor (wcj)
+    // 如果当前 feature 时刻附近能同步到 GNSS，则把这一时刻记为 GNSS key，并加入 GNSS 因子。
     if (GNSSEnable = container.isGNSSEnable(currentCorrectionTime))
     {
         gpsKeyQueue.push_back(key);
         if (useGPS)
         {
             ROS_INFO("GPS KEY %d", key);
-            addGPSFactor(nb, npr, ndop);
+            addGPSFactor(nb, npr, ndop);// 把当前时刻的 GNSS 因子加入图中。
         }
     }
 
@@ -681,6 +751,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     noiseModel::Base::shared_ptr
         correctRotNoise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.01, 0.01, 0.01).finished()); // rad,rad,rad,m, m, m
 
+    // 旋转先验：当当前帧不适合只做相对约束时，用 lidar 姿态对当前 pose 的旋转部分施加先验。
     PoseRotationPrior<gtsam::Pose3> pose_rotation_factor(X(key), curPose.rotation(),
         degenerate ? correctRotNoise2 : correctRotNoise);
 
@@ -695,6 +766,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     volatile double deltat = currentCorrectionTime - lastgpstime;
     if (fabs(delta_Pose1.z() / deltat) < 0.15)
     {
+        // 原本这里计划加入垂向约束（Z 方向运动较小），目前仍然保留为可选逻辑。
         noiseModel::Base::shared_ptr
             Zaxis_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.01).finished());
 
@@ -703,6 +775,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
 
     if (isStatic)
     {
+        // 静止时加入 ZUPT：速度接近 0。
         noiseModel::Base::shared_ptr
             ZUPTnoise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.01, 0.01, 0.01).finished());
         noiseModel::Base::shared_ptr
@@ -715,6 +788,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     {
         if (!featureInfo.isKeyFrame || !GNSSEnable)
         {
+            // 非关键帧或当前没有 GNSS 时，默认使用“上一关键帧 -> 当前帧”的相对位姿约束。
             graphFactors.add(gtsam::BetweenFactor<gtsam::Pose3>(X(lastKeyIndex),
                 X(key),
                 delta_Pose1,
@@ -725,10 +799,12 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         {
             if (coupleMode == 1)
             {
+                // coupleMode==1 时，直接加入点到边 / 点到面这类 scan-to-map lidar 因子。
                 addLidarFactor();
             }
             else if (coupleMode == 0)
             {
+                // coupleMode==0 时，仍然退回到相对位姿约束。
                 graphFactors.add(gtsam::BetweenFactor<gtsam::Pose3>(X(lastKeyIndex),
                     X(key),
                     delta_Pose1,
@@ -738,6 +814,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     }
     else
     {
+        // 不做相对约束时，直接把 lidar 当前位姿作为绝对先验加入。
         graphFactors.add(pose_factor);
     }
 
@@ -745,6 +822,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
 
     if (useNHC)
     {
+        // NHC（非完整约束）只在角速度不大时使用，用于约束车辆侧向/垂向速度。
         gtsam::Vector3 angular_velocity = Rot3::Logmap(imuIntegratorOpt_->deltaRij()) / imuIntegratorOpt_->deltaTij();
         if (angular_velocity.norm() * 180 / M_PI < thres_angular_velocity)
         {
@@ -833,8 +911,10 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     prePose = curPose;
 
     // optimize
+    // 把本轮新增因子和初值送入 iSAM2，并先做一次增量更新。
     updateAndMarginalize(graphFactors, graphValues, {}, optimizer);
 
+    // 额外再做两次空更新，帮助增量解更充分收敛。
     for (int i = 0; i < 2; i++)
     {
         updateAndMarginalize({}, {}, {}, optimizer);
@@ -842,6 +922,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
 
     if (!isRelative)
     {
+        // 在非相对模式下再额外推进几次 iSAM2，增强稳定性。
         optimizer.update();
         optimizer.update();
         optimizer.update();
@@ -850,6 +931,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     graphValues.clear();
     // Overwrite the beginning of the preintegration for the next step.
     // do ambiguty resolve
+    // 取出当前优化结果，并在需要时执行载波 ambiguity fixing。
     gtsam::Values result = optimizer.calculateEstimate();
     static int state = 6;
     static Pose3 sol_pos;
@@ -857,6 +939,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     posCovariance = optimizer.marginalCovariance(X(key));
     if (useGPS && useObs && useCarrier && useAmbFix && GNSSEnable)
     {
+        // 只有在“原始观测 + 载波 + 开启固定 + 当前有 GNSS”时才尝试整数固定。
         state = container.ambiguityResolve(optimizer, result, key, posCovariance, sol_pos);
     }
     if (debugImu)
@@ -869,12 +952,16 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     prevBias_ = result.at<gtsam::imuBias::ConstantBias>(B(key));
     if (estimateExtGPS)
     {
+        // 若在线估计 IMU-GPS 外参，则每轮优化后都回写最新外参。
         extGPS = result.at<gtsam::Vector3>(T(key));
         if (debugGps)
         {
             ROS_INFO("EXT IMU 2 GPS %lf %lf %lf", extGPS.x(), extGPS.y(), extGPS.z());
         }
     }
+    // Keep only the most recent GNSS-aligned state blocks in the active graph.
+    // Once we have more than two GNSS key boundaries, marginalize the oldest
+    // interval [startKey, endKey) to keep the sliding window bounded.
     if (gpsKeyQueue.size() > 2)
     {
         KeySet marginalKeys;
@@ -883,22 +970,31 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         int endKey = gpsKeyQueue.front();
         for (int i = startKey; i < endKey; i++)
         {
+            // Core navigation states in the oldest GNSS interval.
             marginalKeys.insert(X(i));
             marginalKeys.insert(V(i));
             marginalKeys.insert(B(i));
+            // Carrier ambiguity state exists only when the corresponding epoch
+            // actually inserted N(i) into the optimizer.
             if (optimizer.valueExists(N(i)))
             {
                 marginalKeys.insert(N(i));
             }
+            // GPS extrinsic state exists only when online extrinsic estimation
+            // is enabled and T(i) was added for that epoch.
             if (optimizer.valueExists(T(i)))
             {
                 marginalKeys.insert(T(i));
             }
         }
+        // Remove the oldest interval from the active optimization window while
+        // preserving its information through marginalization.
         updateAndMarginalize({}, {}, marginalKeys, optimizer);
     }
     if (!optimizer.valueExists(N(lastGNSSepoch)))
     {
+        // 如果上一 GNSS epoch 的 ambiguity 状态已经不在活动图里，
+        // 就清空连续性映射，避免下一轮 carrier 时序约束引用无效旧状态。
         container.reset_last_ar_index();
         ROS_INFO("%d does not exist", lastGNSSepoch);
     }
@@ -910,6 +1006,8 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     // write gps result
     if (GNSSEnable)
     {
+        // 当前时刻正好贴近整数秒时，认为这是一个 GNSS 输出时刻，
+        // 将当前优化后的 GPS/ENU 结果写入结果文件。
         lla_origin = container.getOrigin();
         gpsPose = prevPose_.compose(gps2imu); // prevPose_
         Pose3 tmppose = prevState_.pose().compose(gps2imu);
@@ -928,6 +1026,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     }
     lidarPose = prevPose_.compose(imu2Lidar);
     // publish odometry
+    // 把最终优化后的 IMU 状态再转换回 lidar 坐标系，并发布里程计。
     nav_msgs::Odometry odometry;
     odometry.header.stamp.fromSec(currentCorrectionTime);
     odometry.header.frame_id = odometryFrame;
@@ -952,9 +1051,12 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     }
 
     // Reset the optimization preintegration object.
+    // 用最新优化后的 bias 重置“优化用预积分器”，准备下一轮从零开始积分。
     imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
 
     // 2. after optiization, re-propagate imu odometry preintegration
+    // 这里是“发布用 / 实时传播用”的 IMU 预积分重传播：
+    // 用最新优化后的状态和 bias，把 imuQueImu 重新积分，保证连续输出平滑。
     prevStateOdom = prevState_;
     prevBiasOdom = prevBias_;
     // first pop imu message older than current correction data
@@ -987,6 +1089,8 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         }
     }
     doneFirstOpt = true;
+
+    // 当前帧处理完成，进入下一时刻。
     ++key;
 }
 

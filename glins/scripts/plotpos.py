@@ -9,6 +9,31 @@ import matplotlib.dates as mdates
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator
 import rtkcmn
 
+def load_pos_xyz(path):
+    """Load the first five columns of RTKLIB/GLINS .pos files.
+
+    The repo produces both RTKLIB-style files whose headers start with `%`
+    and helper files whose comments may start with `#`.  Older numpy.loadtxt
+    calls only skipped `#`, so RTKLIB headers were parsed as data.
+    """
+    rows = []
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line[0] in ("%", "#"):
+                continue
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            try:
+                [float(v) for v in parts[:5]]
+            except ValueError:
+                continue
+            rows.append(parts[:5])
+    if not rows:
+        raise ValueError(f"no position rows found in {path}")
+    return np.asarray(rows, dtype=str)
+
 def mjd2time(mjd):
     t0 = datetime.datetime(1858, 11, 17, 0, 0, 0, 0)
     return t0 + datetime.timedelta(days=mjd)
@@ -23,7 +48,7 @@ def gps_week2time(week):
 #     sys.exit(0)
 
 if len(sys.argv) == 6:
-    kinflname = sys.argv[1]
+    kinflname = [sys.argv[1]]
     pngflname = sys.argv[2]
     x_ref = float(sys.argv[3])
     y_ref = float(sys.argv[4])
@@ -63,7 +88,7 @@ for kinf in kinflname:
     # Prepare Date
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        datatmp = np.loadtxt(kinf, dtype=str, comments='#')
+        datatmp = load_pos_xyz(kinf)
     n = len(datatmp)
     if n == 0:
         print('Error: empty input file: enu_tmp')
@@ -77,7 +102,7 @@ for kinf in kinflname:
             for j in range(4):
                 data[num, j + 1] = float(datatmp[i, j + 1])
             pos = rtkcmn.ecef2pos(ref)
-            data[num, 2:5] = rtkcmn.ecef2enu(pos, data[num, 2:5])
+            data[num, 2:5] = rtkcmn.ecef2enu(pos, data[num, 2:5] - ref)
             num = num + 1
 
     n = num

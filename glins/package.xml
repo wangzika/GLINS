@@ -1,17 +1,25 @@
 <?xml version="1.0"?>
 <package>
+  <!-- ROS 包名 -->
   <name>glins</name>
+  <!-- 当前包版本 -->
   <version>1.0.0</version>
+  <!-- 包功能简介 -->
   <description>Lidar Odometry</description>
 
+  <!-- 维护者信息 -->
   <maintainer email="shant@mit.edu">Tixiao Shan</maintainer>
 
+  <!-- 许可证信息，当前还未补全 -->
   <license>TODO</license>
 
+  <!-- 作者信息 -->
   <author>Tixiao Shan</author>
 
+  <!-- 构建工具依赖：使用 catkin 作为构建系统 -->
   <buildtool_depend>catkin</buildtool_depend>
 
+  <!-- roscpp / rospy / rosbag：ROS C++、Python 与 bag 支持 -->
   <build_depend>roscpp</build_depend>
   <run_depend>roscpp</run_depend>
   <build_depend>rospy</build_depend>
@@ -19,21 +27,27 @@
   <build_depend>rosbag</build_depend>
   <run_depend>rosbag</run_depend>
 
+  <!-- rtklib：GNSS 原始观测处理与后处理相关依赖 -->
   <build_depend>rtklib</build_depend>
   <run_depend>rtklib</run_depend>
 
+  <!-- tf：坐标变换支持 -->
   <build_depend>tf</build_depend>
   <run_depend>tf</run_depend>
 
+  <!-- cv_bridge：OpenCV 与 ROS 图像消息转换 -->
   <build_depend>cv_bridge</build_depend>
   <run_depend>cv_bridge</run_depend>
 
+  <!-- jsk_recognition_msgs：部分可视化/识别消息类型依赖 -->
   <build_depend>jsk_recognition_msgs</build_depend>
   <run_depend>jsk_recognition_msgs</run_depend>
 
+  <!-- pcl_conversions：PCL 点云与 ROS 点云消息转换 -->
   <build_depend>pcl_conversions</build_depend>
   <run_depend>pcl_conversions</run_depend>
 
+  <!-- 常用 ROS 消息类型依赖 -->
   <build_depend>std_msgs</build_depend>
   <run_depend>std_msgs</run_depend>
   <build_depend>sensor_msgs</build_depend>
@@ -45,11 +59,13 @@
   <build_depend>visualization_msgs</build_depend>
   <run_depend>visualization_msgs</run_depend>
 
+  <!-- 自定义消息生成与运行时支持 -->
   <build_depend>message_generation</build_depend>
   <run_depend>message_generation</run_depend>
   <build_depend>message_runtime</build_depend>
   <run_depend>message_runtime</run_depend>
 
+  <!-- GTSAM：因子图优化核心库 -->
   <build_depend>GTSAM</build_depend>
   <run_depend>GTSAM</run_depend>
 

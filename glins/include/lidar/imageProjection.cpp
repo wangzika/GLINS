@@ -590,19 +590,36 @@ void ImageProjection::projectPointCloud()
 
 void ImageProjection::groundRemoval_patchwork()
 {
+    // Patchwork 地面分割版本：
+    // 先用 Patchwork 在原始点云中分出地面点/非地面点，
+    // 再把地面点映射回 range image 的 groundMat，用于后续点云分割。
     float verticalAngle, horizonAngle, range;
     size_t lowerInd, upperInd;
+
+    // Patchwork 输出的地面点和非地面点。
     pcl::PointCloud<PointXYZIRT> groundCloud;
     pcl::PointCloud<PointXYZIRT> nongroundCloud;
+
+    // 过滤后的地面点，用于发布可视化。
     pcl::PointCloud<PointXYZIRT> groundCloudFS;
     double time_cost;
+
+    // 只检查底部若干根线。地面通常主要出现在低线束区域。
     int groundScanInd = 7;
+
+    // 调用 Patchwork 地面分割器：
+    // 输入为当前原始 LiDAR 点云，输出 groundCloud 和 nongroundCloud。
     PatchWorkGroundSeg->estimate_ground(*laserCloudIn, groundCloud, nongroundCloud, time_cost);
+
+    // 先根据 fullCloud 的有效性初始化 groundMat 中低线束区域。
+    // 如果相邻两根线在同一水平列没有有效点，则该位置无法判断地面，标记为 -1。
     for (size_t j = 0; j < Horizon_SCAN; ++j)
     {
         for (size_t i = 0; i < groundScanInd; ++i)
         {
 
+            // fullCloud 是按 row * Horizon_SCAN + column 展开的一维点云。
+            // lowerInd / upperInd 分别对应同一列 j 下相邻两根线的点。
             lowerInd = j + (i)*Horizon_SCAN;
             upperInd = j + (i + 1) * Horizon_SCAN;
 
@@ -615,6 +632,9 @@ void ImageProjection::groundRemoval_patchwork()
             }
         }
     }
+
+    // 进一步筛选 Patchwork 判断出的地面点。
+    // 当前只保留 z < -1.8 的点用于发布，这个阈值和传感器安装高度/坐标系有关。
     size_t gcloudsize = groundCloud.points.size();
     for (size_t i = 0; i < gcloudsize; ++i)
     {
@@ -623,21 +643,31 @@ void ImageProjection::groundRemoval_patchwork()
             groundCloudFS.push_back(groundCloud.points[i]);
         }
     }
+
+    // 发布筛选后的地面点云，主要用于 RViz 可视化和调试。
     cloudInfo.cloud_ground = publishCloud(pubGroundCloud, &groundCloudFS, cloudHeader.stamp, lidarFrame);
+
+    // 将地面点重新投影回 range image：
+    // rowIdn 来自点的 ring，columnIdn 根据水平角计算。
     size_t rowIdn, columnIdn, gcloudSize = groundCloudFS.points.size();
     PointType thisPoint;
     for (size_t i = 0; i < gcloudSize; ++i)
     {
 
+        // 注意：这里使用 groundCloud 中的点坐标，而循环长度来自 groundCloudFS。
+        // 如果 groundCloudFS 是 groundCloud 的过滤子集，这里索引对应关系可能不完全严格。
         thisPoint.x = groundCloud.points[i].x;
         thisPoint.y = groundCloud.points[i].y;
         thisPoint.z = groundCloud.points[i].z;
 
+        // ring 表示该点属于第几根激光线，对应 range image 的行号。
         rowIdn = groundCloud.points[i].ring;
 
         if (rowIdn < 0 || rowIdn >= N_SCAN)
             continue;
 
+        // 根据水平角计算 range image 的列号。
+        // Horizon_SCAN 表示一圈水平扫描被离散成多少列。
         horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
         static float ang_res_x = 360.0 / float(Horizon_SCAN);
         columnIdn = -round((horizonAngle - 90.0) / ang_res_x) + Horizon_SCAN / 2;
@@ -650,9 +680,11 @@ void ImageProjection::groundRemoval_patchwork()
         if (groundMat.at<int8_t>(rowIdn, columnIdn) == -1)
             continue;
 
+        // 将该地面点的距离写入 intensity，便于后续按距离或可视化使用。
         range = sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y + thisPoint.z * thisPoint.z);
         groundCloud.points[i].intensity = range;
 
+        // groundMat=1 表示该 row/column 位置被判定为地面点。
         groundMat.at<int8_t>(rowIdn, columnIdn) = 1;
     }
 }

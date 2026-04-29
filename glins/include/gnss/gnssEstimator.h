@@ -49,26 +49,26 @@ class gnssEstimator : public ParamServer
 {
 public:
     NonlinearFactorGraph graph;
-    Values initialEstimate;
-    Values initialVel;
-    ISAM2 optimizer;
-    Values currentEstimate;
+    Values initialEstimate;// 优化初值，包含状态变量的初始猜测。
+    Values initialVel;// 初始速度估计，主要用于构造 IMU 因子时的初值。
+    ISAM2 optimizer;// ISAM2 优化器，负责增量式优化。
+    Values currentEstimate;// 当前优化结果，包含最新的状态估计。
 
-    ros::Publisher pub_FGOENU;
-    ros::Publisher pub_WLSENU;
-    ros::Publisher pub_predict_ENU;
+    ros::Publisher pub_FGOENU;// 发布 FGO 优化结果的路径消息。
+    ros::Publisher pub_WLSENU;// 发布 WLS 结果的路径消息。
+    ros::Publisher pub_predict_ENU;// 发布 FGO 预测结果的路径消息。
 
-    std::deque<rtklib::GNSS_Info> gnss_queue;
-    rtklib::GNSS_Info gnss_info;
-    GNSS_Tools gnssTools;
+    std::deque<rtklib::GNSS_Info> gnss_queue;// GNSS 观测队列，存储接收到的 GNSS 观测信息。
+    rtklib::GNSS_Info gnss_info;// 当前 GNSS 观测信息，包含卫星观测数据和相关状态。
+    GNSS_Tools gnssTools;// GNSS 工具类，提供坐标转换、预处理等功能。
 
-    nav_msgs::Path fgo_path;
-    nav_msgs::Path wls_path;
-    nav_msgs::Path fgo_reltime_path;
+    nav_msgs::Path fgo_path;// FGO 优化结果路径消息，用于可视化优化结果。
+    nav_msgs::Path wls_path;// WLS 结果路径消息，用于可视化 WLS 结果。
+    nav_msgs::Path fgo_reltime_path;// FGO 预测结果路径消息，用于可视化 FGO 预测结果。
 
-    std::map<int, double> time_map;
-    ros::Subscriber sub_gnss_raw;
-    std::mutex gnss_mutex;
+    std::map<int, double> time_map;// 时间映射表，记录每个优化轮次的时间戳，用于分析优化性能和时间分布。
+    ros::Subscriber sub_gnss_raw;// 订阅 GNSS 原始观测信息的 ROS 话题，接收 GNSS 观测数据。
+    std::mutex gnss_mutex;// 互斥锁，保护 GNSS 观测数据的访问，确保线程安全。
 
     //    std::thread optimizationThread;
     Eigen::Matrix<double, 3, 1> ENU_ref;

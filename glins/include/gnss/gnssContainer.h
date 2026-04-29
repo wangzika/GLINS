@@ -112,57 +112,89 @@ public:
         prcopt = prcopt_default;
         solopt = solopt_default;
         bool systemInitialized_ = false;
-        bool estimateExtGPS_ = false;
-        getsysopts(&prcopt, &solopt, &filopt);
+        bool estimateExtGPS_ = false;// 这两个标志由构造参数传入成员变量，这里先用默认值占位。
+        getsysopts(&prcopt, &solopt, &filopt);// 从配置文件中读取 RTKLIB 参数
 
-        Vector3 ecef_ref(prcopt.rb[0], prcopt.rb[1], prcopt.rb[2]);
+        Vector3 ecef_ref(prcopt.rb[0], prcopt.rb[1], prcopt.rb[2]);//从 RTKLIB 基站坐标 prcopt.rb 读取参考站 ECEF 坐标
 
-        rtkinit(&rtk, &prcopt);
-        prevAmb = VectorXd(NB(&prcopt)).setZero();
-        AmbFullArray = VectorXd(NB(&prcopt)).setZero();
+        rtkinit(&rtk, &prcopt);// 初始化 RTKLIB 的 rtk 解算器内部结构
+        prevAmb = VectorXd(NB(&prcopt)).setZero();// 按当前 RTK 配置可估计的 ambiguity 数量 NB(&prcopt) 分配缓存
+        AmbFullArray = VectorXd(NB(&prcopt)).setZero();// prevAmb: 上一时刻的模糊度结果；AmbFullArray: 全尺寸 ambiguity 数组缓存
         gnss_queue.clear();
     }
 
     gnssContainer(const string& rtklibConfigPath, NodeHandle& nh, bool systemInitialized_ = false, bool estimateExtGPS_ = false) : systemInitialized(systemInitialized_), estimateExtGPS(estimateExtGPS_)
     {
+        // 初始化一些基础状态标志。
+        // init_origin: 是否已经建立 ENU 原点
+        // systemInitialized / estimateExtGPS: 由构造参数直接传入成员变量
         init_origin = false;
+
+        // 先把 RTKLIB 的处理选项、输出选项恢复到默认值，
+        // 后面再用配置文件中的内容覆盖。
         prcopt = prcopt_default;
         solopt = solopt_default;
+
+        // 从配置文件中读取 RTKLIB 参数。
+        // 如果读取失败，说明 GNSS 解算基础配置不可用，直接退出程序。
         if (!loadopts(rtklibConfigPath.c_str(), sysopts))
         {
             exit(1);
         }
+
+        // 把 sysopts 里的文本/通用配置展开成 RTKLIB 真正使用的：
+        // prcopt: 处理选项
+        // solopt: 输出选项
+        // filopt: 文件相关选项
         getsysopts(&prcopt, &solopt, &filopt);
 
-        /*subscriber*/
+        // 注册 GNSS 原始观测订阅。
+        // 后续 RTKLIB 处理、双差伪距/载波/多普勒因子构造，
+        // 都依赖这个回调不断把 GNSS_Info 推入容器内部缓存。
         sub_gnss_raw = nh.subscribe<rtklib::GNSS_Info>("gnss_raw", 100, &gnssContainer::gnssInfoHandler, this,
             ros::TransportHints().tcpNoDelay());
 
+        // 读取一个可选开关：是否使用外部提供的真值位置作为参考。
         nh.param<bool>("glins/useGroundTruthPos", useGroundTruthPos, false);
+
+        // 读取真值位置参数，默认是长度为 3 的零向量。
         nh.param<vector<double>>("glins/GroundTruthPos", GroundTruthPosV, vector<double>(3, 0));
+
+        // 把 std::vector<double> 映射成 Eigen 向量，便于后续数学运算。
         GroundTruthPos = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(GroundTruthPosV.data(), 3, 1);
+
+        // 从 RTKLIB 基站坐标 prcopt.rb 读取参考站 ECEF 坐标。
+        // 这里先构造出来，后面如果需要可作为参考站或原点相关计算的输入。
         Vector3 ecef_ref(prcopt.rb[0], prcopt.rb[1], prcopt.rb[2]);
 
+        // 初始化 RTKLIB 的 rtk 解算器内部结构。
         rtkinit(&rtk, &prcopt);
+
+        // 按当前 RTK 配置可估计的 ambiguity 数量 NB(&prcopt) 分配缓存。
+        // prevAmb: 上一时刻的模糊度结果
+        // AmbFullArray: 全尺寸 ambiguity 数组缓存
         prevAmb = VectorXd(NB(&prcopt)).setZero();
         AmbFullArray = VectorXd(NB(&prcopt)).setZero();
+
+        // 清空 GNSS 观测缓存队列，保证容器刚创建时内部状态干净。
         gnss_queue.clear();
     }
-
+    //重制上一时刻模糊度索引，通常在新的一轮优化开始前调用，确保上一时刻的模糊度索引不影响当前轮次的模糊度关联。
     void reset_last_ar_index()
     {
         last_ar_index.clear();
     }
+    // 设置系统初始化状态，通常在完成初始定位后调用，允许后续的 GNSS 因子正常构造和加入图中。
     void setSystemInitialized(bool initialized)
     {
         systemInitialized = initialized;
     }
-
+    // 设置是否估计外部 GPS 位置，通常在构造函数或运行时根据需要调用，控制是否使用外部 GPS 位置作为约束。
     void setEstimateExtGPS(bool estimated)
     {
         estimateExtGPS = estimated;
     }
-
+    // 设置外部旋转矩阵，通常在构造函数或运行时根据需要调用，提供从 GPS 坐标系到 IMU/LiDAR 坐标系的旋转关系。
     void setExtRot(Matrix3d& ext)
     {
         extRot = ext;
@@ -208,14 +240,14 @@ public:
 
     int addDDPsrFactorENU(gtsam::NonlinearFactorGraph* graphFactors, gtsam::Values* graphValues, int key)
     {
-        int validSat[MAXSAT] = { 0 };
-        int npr = 0, ns;
-        ns = gnss_info.SD_Infos.size();
-        for (int m = 0; m < 6; m++)
+        int validSat[MAXSAT] = { 0 };// 当前时刻可用的卫星列表，长度为 MAXSAT，元素值为 0/1 表示对应卫星是否可用。
+        int npr = 0, ns;// npr: 当前时刻可用的双差伪距观测数量；
+        ns = gnss_info.SD_Infos.size();// ns: 当前时刻的卫星观测数量，等于 GNSS_Info 中 SD_Infos 的长度。
+        for (int m = 0; m < 6; m++)// 依次尝试每个系统（GPS、GLONASS、Galileo、北斗等），找到每个系统中符合条件的主卫星和从卫星，构造双差伪距因子。
         {
-            for (int f = 0; f < 3; f++)
+            for (int f = 0; f < 3; f++)// 依次尝试每个频率（L1、L2、L5），构造对应频率的双差伪距因子。
             {
-                int sysi, sysj;
+                int sysi, sysj;// sysi: 主卫星所属系统；sysj: 从卫星所属系统。
                 int i, j;
                 for (i = -1, j = 0; j < ns; j++)
                 {
@@ -223,15 +255,15 @@ public:
                     sysi = ssatj.sys;
                     // if (!ssatj.vsatP[f])
                     //     continue;
-                    if (!test_sys(sysi, m) || sysi == SYS_SBS)
+                    if (!test_sys(sysi, m) || sysi == SYS_SBS)// 判断是那个系统然后进行处理，不考虑 SBAS。
                         continue;
                     if (gnss_info.SD_Infos[j].Mea_Rover.P[f] == 0.0 || gnss_info.SD_Infos[j].Mea_Base.P[f] == 0.0 || ssatj.azel[1] == 0.0 || ssatj.azel_b[1] == 0.0)
                         continue;
-                    if (satexclude(gnss_info.SD_Infos[j].Mea_Rover.sat, ssatj.ephvar, ssatj.svh, &prcopt))
+                    if (satexclude(gnss_info.SD_Infos[j].Mea_Rover.sat, ssatj.ephvar, ssatj.svh, &prcopt))// 卫星排除列表过滤
                         continue;
-                    if (i >= 0 && gnss_info.SD_Infos[j].ssat.slip[f] & LLI_SLIP)
+                    if (i >= 0 && gnss_info.SD_Infos[j].ssat.slip[f] & LLI_SLIP)// 周跳卫星不选作主卫星
                         continue;
-                    if (testsnr(0, f, ssatj.azel[1], gnss_info.SD_Infos[j].Mea_Rover.SNR[f] * SNR_UNIT, &prcopt.snrmask))
+                    if (testsnr(0, f, ssatj.azel[1], gnss_info.SD_Infos[j].Mea_Rover.SNR[f] * SNR_UNIT, &prcopt.snrmask))// 信噪比过滤
                         continue;
                     if (i < 0 || ssatj.azel[1] >= gnss_info.SD_Infos[i].ssat.azel[1])
                         i = j;
@@ -241,15 +273,16 @@ public:
 
                 rtklib::GNSS_Info_SD Info_Master = gnss_info.SD_Infos[i];
                 vector<rtklib::GNSS_Info_SD> Infos_Else;
+                // 遍历当前时刻的卫星观测，找到同系统下符合条件的从卫星，构造双差伪距因子。
                 for (j = 0; j < ns; j++)
                 {
                     if (i == j)
                         continue; /* skip ref sat */
-                    rtklib::sat_state ssatj = gnss_info.SD_Infos[j].ssat;
-                    sysj = ssatj.sys;
+                    rtklib::sat_state ssatj = gnss_info.SD_Infos[j].ssat;// ssatj: 当前卫星的状态信息，包括系统、卫星编号、观测质量等。
+                    sysj = ssatj.sys;// sysj: 当前卫星所属系统
                     // if (!ssatj.vsatP[f])
                     //     continue;
-                    if (!test_sys(sysj, m))
+                    if (!test_sys(sysj, m))// 判断是那个系统然后进行处理，不考虑 SBAS。
                         continue;
                     if (gnss_info.SD_Infos[j].Mea_Rover.P[f] == 0.0 || gnss_info.SD_Infos[j].Mea_Base.P[f] == 0.0 || ssatj.azel[1] == 0.0 || ssatj.azel_b[1] == 0.0)
                         continue;
@@ -257,20 +290,20 @@ public:
                         continue;
                     if (testsnr(0, f, ssatj.azel[1], gnss_info.SD_Infos[j].Mea_Rover.SNR[f] * SNR_UNIT, &prcopt.snrmask))
                         continue;
-                    vector<rtklib::GNSS_Info_SD> tmpInfo;
-                    tmpInfo.push_back(gnss_info.SD_Infos[j]);
-                    noiseModel::Base::shared_ptr noise = noiseModel::Isotropic::Sigma(1, 1);
+                    vector<rtklib::GNSS_Info_SD> tmpInfo;// 构造当前从卫星的观测信息，准备传入双差伪距因子构造函数。
+                    tmpInfo.push_back(gnss_info.SD_Infos[j]);// 这里构造一个长度为 1 的 vector，包含当前从卫星的观测信息。后续如果需要支持多从卫星，可以在这里扩展。
+                    noiseModel::Base::shared_ptr noise = noiseModel::Isotropic::Sigma(1, 1);// 这里先用一个简单的 isotropic noise model，后续可以根据卫星观测质量（如信噪比、卫星高度角等）构造更合理的噪声模型。
                     GNSSDDPsrFactor_ENU dd_psr_factor = GNSSDDPsrFactor_ENU(X(key), Info_Master, tmpInfo, prcopt,
-                        f, true, lla_origin, extGPS, extRot.transpose(), noise);
-                    double residual = dd_psr_factor.debugEvaluateError(graphValues->at<Pose3>(X(key)))[0];
+                        f, true, lla_origin, extGPS, extRot.transpose(), noise);// 构造双差伪距因子，传入主卫星观测、从卫星观测、RTKLIB 配置等信息。
+                    double residual = dd_psr_factor.debugEvaluateError(graphValues->at<Pose3>(X(key)))[0];// 调试输出当前双差伪距因子的残差值，检查是否在合理范围内。
                     if ((fabs(residual) > (15)) && tt < 2.0)
                     {
                         ROS_WARN("pseudorange residual out of range %.3lf", residual);
                         continue;
                     }
-                    Infos_Else.push_back(gnss_info.SD_Infos[j]);
+                    Infos_Else.push_back(gnss_info.SD_Infos[j]);// 把当前从卫星的观测信息加入到从卫星列表中，准备传入双差伪距因子构造函数。
                     if (f == 0)
-                        validSat[gnss_info.SD_Infos[j].Mea_Rover.sat - 1] = 1;
+                        validSat[gnss_info.SD_Infos[j].Mea_Rover.sat - 1] = 1;// 标记当前从卫星为可用，后续可以统计每个卫星的可用次数等信息。
                 }
 
                 if (!Infos_Else.empty())
@@ -314,7 +347,7 @@ public:
                     noiseModel::Base::shared_ptr noise = noiseModel::Diagonal::Sigmas(var);
                     noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Huber::Create(1.0), noise);
 
-                    if (estimateExtGPS)
+                    if (estimateExtGPS)//打开外部 GPS 位置估计后，构造的双差伪距因子会包含一个额外的参数（外部 GPS 位置），因此需要使用不同的因子类（GNSSDDPsrFactor_ENU_lever）来构造因子，并传入外部 GPS 位置相关参数。
                     {
                         GNSSDDPsrFactor_ENU_lever::shared_ptr dd_psr_factor(
                             new GNSSDDPsrFactor_ENU_lever(X(key), T(key), Info_Master, Infos_Else, prcopt,

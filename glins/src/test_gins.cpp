@@ -121,22 +121,41 @@ public:
 class test_GINS : public ParamServer
 {
 public:
+    // 互斥锁：保护多回调/多线程访问共享状态时的数据一致性。
     std::mutex mtx;
 
+    // ROS 通信接口：
+    // subImu        : 订阅 IMU 数据
+    // pubImuOdometry: 发布增量 IMU / 融合里程计
+    // pubGPSPath    : 发布 GNSS 路径
+    // pubIMUPath    : 发布优化后的 IMU/FGO 路径
     ros::Subscriber subImu;
     ros::Publisher pubImuOdometry;
     ros::Publisher pubGPSPath;
     ros::Publisher pubIMUPath;
+
+    // 系统是否已经完成首次初始化。
     bool systemInitialized = false;
 
+    // 各类先验/观测噪声模型：
+    // priorPoseNoise  : 初始位姿先验
+    // priorVelNoise   : 初始速度先验
+    // priorBiasNoise  : 初始 IMU bias 先验
+    // correctionNoise : 正常 lidar 校正噪声
+    // correctionNoise2: 退化时使用的更宽松噪声
+    // priorExtNoise   : 外参先验噪声
     gtsam::noiseModel::Diagonal::shared_ptr priorPoseNoise;
     gtsam::noiseModel::Diagonal::shared_ptr priorVelNoise;
     gtsam::noiseModel::Diagonal::shared_ptr priorBiasNoise;
     gtsam::noiseModel::Diagonal::shared_ptr correctionNoise;
     gtsam::noiseModel::Diagonal::shared_ptr correctionNoise2;
     gtsam::noiseModel::Diagonal::shared_ptr priorExtNoise;
+
+    // bias 随机游走噪声，用于相邻时刻 bias 之间的 BetweenFactor。
     gtsam::Vector noiseModelBetweenBias;
 #ifdef USE_COMBINED_IMU
+    // imuIntegratorOpt_ : 优化线程使用的 IMU 预积分器
+    // imuIntegratorImu_ : 实时传播/发布线程使用的 IMU 预积分器
     gtsam::PreintegratedCombinedMeasurements* imuIntegratorOpt_;
     gtsam::PreintegratedCombinedMeasurements* imuIntegratorImu_;
 
@@ -144,49 +163,75 @@ public:
     gtsam::PreintegratedImuMeasurements* imuIntegratorOpt_;
     gtsam::PreintegratedImuMeasurements* imuIntegratorImu_;
 #endif
+
+    // 两个 IMU 队列：
+    // imuQueOpt : 提供给优化线程积分
+    // imuQueImu : 提供给发布/重传播线程积分
     std::deque<sensor_msgs::Imu> imuQueOpt;
     std::deque<sensor_msgs::Imu> imuQueImu;
 
+    // 上一轮优化后的核心状态，用作下一轮预测与预积分起点。
     gtsam::Pose3 prevPose_;
     gtsam::Vector3 prevVel_;
     gtsam::NavState prevState_;
     gtsam::imuBias::ConstantBias prevBias_;
+
+    // 上一轮 ambiguity 状态（用于载波相位相关处理）。
     Vector prevAmb_;
 
+    // 用于 odom/发布线程重传播的上一状态与 bias。
     gtsam::NavState prevStateOdom;//
     gtsam::imuBias::ConstantBias prevBiasOdom;//先验
 
+    // 协方差缓存：位姿协方差与 ambiguity 协方差。
     MatrixXd posCovariance;
     MatrixXd ambCovariance;
 
+    // doneFirstOpt   : 是否已经完成第一轮优化
+    // thisImuT_imu   : 当前 IMU 消息时间
+    // lastImuT_imu   : 上一条发布线程 IMU 时间
+    // lastImuT_opt   : 上一条优化线程 IMU 时间
     bool doneFirstOpt = false;
     double thisImuT_imu = -1;
     double lastImuT_imu = -1;
     double lastImuT_opt = -1;
 
+    // 因子图优化器与当前轮新增的因子/初值容器。
     gtsam::ISAM2 optimizer;
     gtsam::NonlinearFactorGraph graphFactors;
     gtsam::Values graphValues;
     gtsam::Values result;
 
+    // 各类缓存队列：
+    // gpsMeasQueue : GNSS 测量队列
+    // imuQueue     : IMU 队列
+    // lioqueue     : LIO 帧数据队列
     std::deque<GNSSPose> gpsMeasQueue;
     std::deque<sensor_msgs::Imu> imuQueue;
     std::deque<FrameData> lioqueue;
 
+    // 平均优化耗时统计；delta_t 为传感器时间偏移补偿（当前为 0）。
     double average_time = 0.0;
     const double delta_t = 0;
 
+    // 当前 GNSS 原始信息与最近一次 GNSS epoch 索引。
     rtklib::GNSS_Info gnss_info;
     int lastGNSSepoch = 0;
+
+    // 用于姿态/位置连续性处理的缓存量。
     double yaw = 0.0, prevYaw = 0.0;
     Eigen::Vector3d prevPos = Eigen::Vector3d(0, 0, 0);
     geometry_msgs::Quaternion yawQuat;
     nav_msgs::Path gpsOdomPath;
 
+    // 当前图优化对应的时间索引。
     int key = 0;
 
     nav_msgs::Path imuPath;
 
+    // 坐标外参：
+    // imu2Lidar / lidar2Imu 分别表示 IMU 与 lidar 坐标系之间的位姿变换。
+    // 这里使用 extTrans 构造平移部分，旋转部分当前设为单位阵。
     // T_bl: tramsform points from lidar frame to imu frame
     gtsam::Pose3
         imu2Lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0),
@@ -200,38 +245,49 @@ public:
     gtsam::Pose3
         imu2gps = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(-extGPS.x(), -extGPS.y(), -extGPS.z()));
 
+    // 当前 GPS 位姿、结果文件路径与文件句柄。
     gtsam::Pose3 gpsPose;
     string result_path = "";
     FILE* fp;
     FILE* fp_incre;
 
+    // rosbag 相关的 topic 列表和帧容器。
     std::vector<std::string> topics;
     std::vector<Frame> frames;
 
+    // ENU 原点（由 GNSS 建立）。
     Vector3 lla_origin;
 
+    // 起止 GPS 时间，用于离线数据裁剪。
     gtime_t ts, te;
 
+    // GNSS 容器：负责 RTKLIB 配置、GNSS 观测同步与 GNSS 因子构造。
     gnssContainer container;
 
+    // 当前与上一帧 LIO 数据。
     FrameData curlioframe;
     FrameData lastlioframe;
 
+    // LM 参数（本文件中保留，但当前主优化器实际使用的是 ISAM2）。
     LevenbergMarquardtParams lm_params;
     test_GINS()
     {
-
+        // 发布器初始化。
         pubImuOdometry = nh.advertise<nav_msgs::Odometry>(odomTopic + "_incremental", 2000);
 
         pubGPSPath = nh.advertise<nav_msgs::Path>("glins/gps/path", 1);
         pubIMUPath = nh.advertise<nav_msgs::Path>("glins/imu/fgo_path", 1);
 #ifdef USE_COMBINED_IMU
+        // 构造 IMU 预积分参数，重力大小由配置给定。
         boost::shared_ptr<gtsam::PreintegrationCombinedParams> p = gtsam::PreintegrationCombinedParams::MakeSharedU(imuGravity);
 #else
         boost::shared_ptr<gtsam::PreintegrationParams> p = gtsam::PreintegrationParams::MakeSharedU(imuGravity);
 #endif
+
+        // GPS 与 IMU 之间的平移外参，用于把 GPS 位姿转换到 IMU 坐标系。
         gps2imu = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extGPS.x(), extGPS.y(), extGPS.z()));
 
+        // IMU 白噪声协方差与积分误差协方差设置。
         p->accelerometerCovariance =
             gtsam::Matrix33::Identity(3, 3) * pow(imuAccNoise, 2); // acc white noise in continuous
         p->gyroscopeCovariance =
@@ -240,6 +296,10 @@ public:
             gtsam::Matrix33::Identity(3, 3) *
             pow(1e-4, 2); // error committed in integrating position from velocities
 #ifdef USE_COMBINED_IMU
+        // Combined IMU 模型除了测量白噪声外，还会显式建模 bias 的随机游走。
+        // 这三项和上面的 accelerometerCovariance / gyroscopeCovariance 不是一类量：
+        // 前者描述“零偏会不会随时间漂移”，后者描述“当前测量值本身有多 noisy”。
+        // 详细说明见：glins/IMU_BIAS_NOISE_EXPLANATION.md
         p->biasAccCovariance = gtsam::Matrix33::Identity(3, 3) * pow(imuAccBiasN, 2);
         p->biasOmegaCovariance = gtsam::Matrix33::Identity(3, 3) * pow(imuGyrBiasN, 2);
         p->biasAccOmegaInt = gtsam::Matrix66::Identity(6, 6) * 1e-5;
@@ -254,6 +314,8 @@ public:
         gtsam::imuBias::ConstantBias
             prior_imu_bias((gtsam::Vector(6) << 0, 0, 0, 0, 0, 0).finished());
         ;
+
+        // 构造各种先验与校正噪声模型。
         priorPoseNoise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6)
             << 1e-2,
             1e-2, 1e-2, 1e-2, 1e-2, 1e-2)
@@ -292,6 +354,9 @@ public:
         }
 
 #ifdef USE_COMBINED_IMU
+        // 创建两个 IMU 预积分器：
+        // imuIntegratorImu_ 用于实时传播
+        // imuIntegratorOpt_ 用于图优化
         imuIntegratorImu_ = new gtsam::PreintegratedCombinedMeasurements(p,
             prior_imu_bias); // setting up the IMU integration for IMU message thread
         imuIntegratorOpt_ = new gtsam::PreintegratedCombinedMeasurements(p,
@@ -303,7 +368,11 @@ public:
             new gtsam::PreintegratedImuMeasurements(p,
                 prior_imu_bias); // setting up the IMU integration for optimization
 #endif
-        // init rtk options
+
+        // 初始化 GNSS / RTKLIB 相关组件：
+        // 1. 读取 rtklib 配置
+        // 2. 注册 GNSS 原始观测订阅
+        // 3. 把系统初始化状态、外参和是否在线估计外参等参数同步给 GNSS 容器
         container.loadrtklibConfig(rtklibConfigPath);
         container.registerGnssSubscriber(nh);
         container.setSystemInitialized(systemInitialized);
@@ -313,6 +382,7 @@ public:
     }
     void set_time(gtime_t start_time = { 0 }, gtime_t end_time = { 0 })
     {
+        // 设置离线处理的起止时间窗口。
         ts = start_time;
         te = end_time;
     }

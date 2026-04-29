@@ -66,7 +66,7 @@ public:
             bl, dt, f, &opt, &(Info_Master.Mea_Rover), 0);
 
         R.setConstant(pr_vari);
-
+        //白化矩阵：白化矩阵就是一个 把带协方差的残差变成标准化残差的权重矩阵。
         Eigen::MatrixXd llt(residual_size, residual_size);
 
         // Master指参考星
@@ -1023,13 +1023,13 @@ public:
 class GNSSAmbConstraintCompress : public NoiseModelFactor2<Vector, Vector>
 {
 private:
-    vector<int> sat;
-    vector<int> f;
-    double delta_amb;
-    int residual_size;
-    map<int, int> ar_index;
-    map<int, int> last_ar_index;
-    mutable bool debugInfo;
+    vector<int> sat;// 卫星编号
+    vector<int> f;// 频率编号
+    double delta_amb;// 模型值
+    int residual_size;// 约束数量
+    map<int, int> ar_index;// 模糊度在状态向量中的索引
+    map<int, int> last_ar_index;// 上一时刻模糊度在状态向量中的索引
+    mutable bool debugInfo;// 调试信息输出开关
 
 public:
     GNSSAmbConstraintCompress() = delete;
