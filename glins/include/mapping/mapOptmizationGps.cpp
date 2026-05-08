@@ -2562,7 +2562,7 @@ bool mapOptimization::findGPSAvail(double curTime)
 // 功能：保存关键帧、添加图优化因子、更新iSAM、记录普通/GPS辅助关键帧位姿。
 void mapOptimization::saveKeyFramesAndFactor()
 {
-    if (saveFrame() == false && lidarAssociateMode != 2)
+    if (saveFrame() == false)
         return;
 
     // odom factor

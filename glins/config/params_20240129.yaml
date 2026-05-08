@@ -45,7 +45,7 @@ glins:
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
   lidarMinRange: 3.0                          # default: 1.0, minimum lidar range to be used
   lidarMaxRange: 100.0
-  lidarAssociateMode: 0                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
+  lidarAssociateMode: 2                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
   coupleMode: 0
 
   # IMU Settings
