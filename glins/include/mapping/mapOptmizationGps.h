@@ -121,14 +121,27 @@ public:
 
     ros::ServiceServer srvSaveMap;
 
+    // GPS里程计队列：保存已经转换成ROS Odometry形式的GPS/RTK位姿，用于按LiDAR时间戳取最近GPS约束。
     std::deque<nav_msgs::Odometry> gpsQueue;
+
+    // GNSS原始测量队列：保存GNSSPose结构体，包含更底层的GNSS观测/解算信息，供GPS因子或伪距因子使用。
     std::deque<GNSSPose> gpsMeasQueue;
+
+    // 当前LiDAR帧的综合信息：由前端传入，包含时间戳、特征点云、IMU初值等，是mapping本轮优化的输入缓存。
     glins::cloud_info cloudInfo;
 
+    // LiDAR关键帧点云缓存：
+    // 每当系统决定保存一个关键帧时，会把当前帧提取出的角点、平面点和原始点云存进这些vector。
+    // 下标就是关键帧索引，后续构建局部地图、回环ICP、保存全局PCD时都会按索引取出对应点云。
     vector<pcl::PointCloud<PointType>::Ptr> cornerCloudKeyFrames;
     vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;
     vector<pcl::PointCloud<PointType>::Ptr> laserCloudRawKeyFrames;
 
+    // 普通关键帧的位姿和辅助信息：
+    // keyframePosesOdom/keyframePosestrans保存优化后的关键帧位姿，主要用于轨迹输出和坐标变换。
+    // keyframeRawOdom保存未经后端修正或更接近前端里程计的位姿，便于调试对比。
+    // keyframeTimes记录每个关键帧时间戳，allResVec保存相关点云消息，keyframeDistances记录相邻关键帧累计距离。
+    // keyframeGPSfactor保存与关键帧关联的GPSFactor，方便后续检查或可视化GPS约束。
     std::vector<nav_msgs::Odometry> keyframePosesOdom;
     std::vector<Eigen::Matrix4d> keyframePosestrans;
     std::vector<nav_msgs::Odometry> keyframeRawOdom;
@@ -137,10 +150,26 @@ public:
     std::vector<double> keyframeDistances;
     std::vector<gtsam::GPSFactor> keyframeGPSfactor;
 
+    // 普通LiDAR关键帧位姿容器：
+    // cloudKeyPoses3D只保存关键帧的xyz位置，intensity通常存关键帧索引，用于KD-tree半径搜索和局部地图筛选。
+    // cloudKeyPoses6D保存完整姿态，包括xyz、roll/pitch/yaw、time、intensity等，用于点云变换、图优化、回环约束。
+    // mode 0的scan-to-map主要围绕这组普通LiDAR关键帧构建局部地图。
     pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
-    pcl::PointCloud<PointType>::Ptr cloudKeyGPSPoses3D;
     pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
+
+    // GPS辅助关键帧位姿容器：
+    // 这不是所有普通LiDAR关键帧的简单复制，而是在GPS可用或mode 2逻辑触发时保存的一组GPS参考关键帧。
+    // cloudKeyGPSPoses3D保存GPS辅助关键帧的xyz位置，cloudKeyGPSPoses6D保存其完整姿态和时间。
+    // mode 2会使用这组位姿构建laserCloudCornerFromGPSMap/laserCloudSurfFromGPSMap，
+    // 然后让当前LiDAR扫描去匹配GPS map，因此GNSS误差会更直接影响前端匹配。
+    // gpsIndexContainer用于记录GPS辅助关键帧索引和普通LiDAR关键帧索引之间的对应关系。
+    pcl::PointCloud<PointType>::Ptr cloudKeyGPSPoses3D;
     pcl::PointCloud<PointTypePose>::Ptr cloudKeyGPSPoses6D;
+
+    // 关键帧位姿副本：
+    // 回环线程、可视化线程会遍历关键帧位姿；主优化线程同时也可能在更新cloudKeyPoses。
+    // 因此先把主容器复制到copy_*里，再在副本上做KD-tree搜索、回环检测和marker绘制，减少并发读写风险。
+    // copy_cloudKeyPoses2D通常由3D副本复制而来，并在回环候选搜索时把z置零，只按平面距离找候选。
     pcl::PointCloud<PointType>::Ptr copy_cloudKeyPoses3D;
     pcl::PointCloud<PointType>::Ptr copy_cloudKeyPoses2D;
     pcl::PointCloud<PointTypePose>::Ptr copy_cloudKeyPoses6D;

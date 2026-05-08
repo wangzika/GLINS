@@ -118,6 +118,7 @@ void DataConverter::transformEigen2Odom(double timestamp, nav_msgs::Odometry& la
 
 
 
+// 功能：初始化 mapping 后端，订阅/发布 ROS 话题，创建服务，分配内存并启动回环/可视化线程。
 mapOptimization::mapOptimization()
 {
     ISAM2Params parameters;
@@ -201,6 +202,7 @@ mapOptimization::mapOptimization()
     // std::cout << sequence << std::endl;
 }
 
+// 功能：分配并初始化点云、KD-tree、滤波器、路径、位姿容器等后端运行所需内存。
 void mapOptimization::allocateMemory()
 {
     cloudKeyPoses3D.reset(new pcl::PointCloud<PointType>());
@@ -266,6 +268,7 @@ void mapOptimization::allocateMemory()
 }
 
 //main ()
+// 功能：接收前端 cloud_info，触发一次 mapping 主流程，包括初值更新、局部地图提取、scan-to-map优化和关键帧保存。
 void mapOptimization::laserCloudInfoHandler(const glins::cloud_infoConstPtr& msgIn)
 {
     // extract time stamp
@@ -318,11 +321,13 @@ void mapOptimization::laserCloudInfoHandler(const glins::cloud_infoConstPtr& msg
     }
 }
 
+// 功能：接收 RTKLIB/GNSS odometry，缓存为后续GPS约束或GPS辅助匹配使用。
 void mapOptimization::rtklibOdomHandler(const nav_msgs::OdometryConstPtr& msg)
 {
     gnssOdomQueue.push_back(*msg);
 }
 
+// 功能：接收外部/前端 LiDAR odometry，并在需要时加入优化图或更新GPS辅助参考位姿。
 void mapOptimization::lidarOdomHandler(const nav_msgs::OdometryConstPtr& odomMsg)
 {
     //        ROS_INFO("opt lidar timestamp: %.8lf",odomMsg->header.stamp.toSec());
@@ -477,6 +482,7 @@ void mapOptimization::lidarOdomHandler(const nav_msgs::OdometryConstPtr& odomMsg
     //        correctPoses();
 }
 
+// 功能：把当前扫描坐标系下的点 pi 按 transPointAssociateToMap 变换到地图坐标系 po。
 void mapOptimization::pointAssociateToMap(PointType const* const pi, PointType* const po)
 {
     po->x = transPointAssociateToMap(0, 0) * pi->x + transPointAssociateToMap(0, 1) * pi->y
@@ -490,6 +496,7 @@ void mapOptimization::pointAssociateToMap(PointType const* const pi, PointType* 
 
 
 
+// 功能：ROS 服务接口，收到请求后保存当前地图和轨迹文件。
 bool mapOptimization::saveMapService(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
 {
     if (cloudKeyPoses6D->size() < 1)
@@ -621,6 +628,7 @@ bool mapOptimization::saveMapService(std_srvs::Empty::Request& req, std_srvs::Em
     return true;
 }
 
+// 功能：无请求参数版本的地图保存函数，离线处理结束时直接调用保存PCD和轨迹。
 bool mapOptimization::saveMapService()
 {
     if (cloudKeyPoses6D->size() < 1)
@@ -671,6 +679,7 @@ bool mapOptimization::saveMapService()
 
     return true;
 }
+// 功能：独立线程定时发布全局地图可视化点云。
 void mapOptimization::visualizeGlobalMapThread()
 {
     ros::Rate rate(0.2);
@@ -681,6 +690,7 @@ void mapOptimization::visualizeGlobalMapThread()
     }
 }
 
+// 功能：从当前位姿附近的关键帧中拼接全局/局部可视化地图并发布。
 void mapOptimization::publishGlobalMap()
 {
     if (pubLaserCloudSurround.getNumSubscribers() == 0)
@@ -746,6 +756,7 @@ void mapOptimization::publishGlobalMap()
 }
 
 
+// 功能：回环检测线程，按固定频率执行回环检测、回环可视化和GPS约束可视化。
 void mapOptimization::loopClosureThread()
 {
     if (loopClosureEnableFlag == false)
@@ -766,6 +777,7 @@ void mapOptimization::loopClosureThread()
     }
 }
 
+// 功能：接收外部回环检测结果，缓存当前帧和历史帧时间戳对。
 void mapOptimization::loopInfoHandler(const std_msgs::Float64MultiArray::ConstPtr& loopMsg)
 {
     std::lock_guard<std::mutex> lock(mtxLoopInfo);
@@ -780,6 +792,7 @@ void mapOptimization::loopInfoHandler(const std_msgs::Float64MultiArray::ConstPt
 
 
 ///回环检测
+// 功能：执行回环检测与ICP配准，成功后生成GTSAM BetweenFactor回环约束。
 void mapOptimization::performLoopClosure()
 {
     if (cloudKeyPoses3D->points.empty() == true)
@@ -865,6 +878,7 @@ void mapOptimization::performLoopClosure()
     lastLoopIndex = loopKeyCur;
 }
 
+// 功能：基于关键帧空间距离和时间间隔寻找候选回环帧。
 bool mapOptimization::detectLoopClosureDistance(int* latestID, int* closestID)
 {
     int loopKeyCur = copy_cloudKeyPoses3D->size() - 1;
@@ -936,6 +950,7 @@ bool mapOptimization::detectLoopClosureDistance(int* latestID, int* closestID)
     return true;
 }
 
+// 功能：根据外部回环消息中的时间戳寻找当前关键帧和历史关键帧索引。
 bool mapOptimization::detectLoopClosureExternal(int* latestID, int* closestID)
 {
     // this function is not used yet, please ignore it
@@ -990,6 +1005,7 @@ bool mapOptimization::detectLoopClosureExternal(int* latestID, int* closestID)
     return true;
 }
 
+// 功能：提取某个关键帧前后 searchNum 个关键帧点云，拼接成回环ICP使用的局部子地图。
 void mapOptimization::loopFindNearKeyframes(pcl::PointCloud<PointType>::Ptr& nearKeyframes, const int& key, const int& searchNum)
 {
     // extract near keyframes
@@ -1016,6 +1032,7 @@ void mapOptimization::loopFindNearKeyframes(pcl::PointCloud<PointType>::Ptr& nea
     *nearKeyframes = *cloud_temp;
 }
 
+// 功能：发布回环节点和边的可视化 Marker，方便在 RViz/noVNC 中查看回环约束。
 void mapOptimization::visualizeLoopClosure()
 {
     if (loopIndexContainer.empty())
@@ -1075,6 +1092,7 @@ void mapOptimization::visualizeLoopClosure()
     pubLoopConstraintEdge.publish(markerArray);
 }
 
+// 功能：发布GPS约束连线可视化，展示LiDAR关键帧和GPS辅助关键帧之间的关系。
 void mapOptimization::visualGPSConstraint()
 {
     if (gpsIndexContainer.empty())
@@ -1143,6 +1161,7 @@ void mapOptimization::visualGPSConstraint()
  * imu里程计信息(cloudInfo.initialGuessX
  * 参考：LIO-SAM中mapOptmization.cpp中的updateInitialGuess()理解（https://blog.csdn.net/qq_44305240/article/details/126990259）
  */
+// 功能：根据IMU初值、上一帧增量里程计和当前状态更新 transformTobeMapped 初始位姿。
 void mapOptimization::updateInitialGuess()
 {
     // save current transformation before any processing
@@ -1274,6 +1293,7 @@ void mapOptimization::updateInitialGuess()
     }
 }
 
+// 功能：提取用于回环或全局地图的关键帧集合，目前实际主流程使用 extractNearby()。
 void mapOptimization::extractForLoopClosure()
 {
     pcl::PointCloud<PointType>::Ptr cloudToExtract(new pcl::PointCloud<PointType>());
@@ -1289,6 +1309,7 @@ void mapOptimization::extractForLoopClosure()
     extractCloud(cloudToExtract);
 }
 
+// 功能：查找当前位姿附近的普通LiDAR关键帧，并在mode 2下额外提取GPS辅助局部地图。
 void mapOptimization::extractNearby()
 {
     pcl::PointCloud<PointType>::Ptr surroundingKeyPoses(new pcl::PointCloud<PointType>());
@@ -1330,20 +1351,32 @@ void mapOptimization::extractNearby()
             break;
         }
     }
-    if (lidarAssociateMode == 0)
+
+    if (lidarAssociateMode == 0)// only use lidar odometry for map optimization
     {
         extractCloud(surroundingKeyPosesDS);
     }
-    else
+    else// use both lidar odometry and GPS for map optimization
     {
         extractCloud(surroundingKeyPosesDS);
         extractCloud_GPS(surroundingKeyPosesDS);
     }
 }
-
+// 功能：根据输入的关键帧位姿点云，提取普通 LiDAR 局部地图，供 scan-to-map 匹配使用。
 void mapOptimization::extractCloud(pcl::PointCloud<PointType>::Ptr cloudToExtract)
 {
-    // fuse the map
+    // 构建普通 LiDAR 局部地图。
+    //
+    // cloudToExtract 中的每个点不是普通激光点，而是一个“关键帧位姿点”：
+    //   - x/y/z: 关键帧在 map/odom 坐标系下的位置；
+    //   - intensity: 该关键帧在 cornerCloudKeyFrames / surfCloudKeyFrames 中的索引。
+    //
+    // 本函数使用 cloudKeyPoses6D 中保存的普通 LiDAR 优化位姿，
+    // 将历史关键帧点云变换到全局 map 系，然后拼成当前帧 scan-to-map 要匹配的局部地图。
+    //
+    // 输出结果：
+    //   - laserCloudCornerFromMapDS: 普通 LiDAR 角点局部地图；
+    //   - laserCloudSurfFromMapDS: 普通 LiDAR 平面点局部地图。
     laserCloudCornerFromMap->clear();
     laserCloudSurfFromMap->clear();
     laserCloudCornerFromGPSMap->clear();
@@ -1351,19 +1384,22 @@ void mapOptimization::extractCloud(pcl::PointCloud<PointType>::Ptr cloudToExtrac
 
     for (int i = 0; i < (int)cloudToExtract->size(); ++i)
     {
+        // 只选取当前最新 LiDAR 关键帧附近的历史关键帧，避免局部地图过大。
         if (pointDistance(cloudToExtract->points[i], cloudKeyPoses3D->back()) > surroundingKeyframeSearchRadius)
             continue;
 
+        // intensity 保存关键帧索引，用它去取对应的角点/平面点关键帧。
         int thisKeyInd = (int)cloudToExtract->points[i].intensity;
         if (laserCloudMapContainer.find(thisKeyInd) != laserCloudMapContainer.end())
         {
-            // transformed cloud available
+            // 已经变换过的关键帧点云直接从缓存取，减少重复 transformPointCloud 计算。
             *laserCloudCornerFromMap += laserCloudMapContainer[thisKeyInd].first;
             *laserCloudSurfFromMap += laserCloudMapContainer[thisKeyInd].second;
         }
         else
         {
-            // transformed cloud not available
+            // 缓存中没有时，使用普通 LiDAR 关键帧位姿 cloudKeyPoses6D 变换历史点云。
+            // 这是 mode 0 的核心地图构建方式，也会作为 mode 2 中普通 LiDAR map 的一部分。
             pcl::PointCloud<PointType> laserCloudCornerTemp =
                 *transformPointCloud(cornerCloudKeyFrames[thisKeyInd],
                     &cloudKeyPoses6D->points[thisKeyInd]);
@@ -1375,44 +1411,68 @@ void mapOptimization::extractCloud(pcl::PointCloud<PointType>::Ptr cloudToExtrac
         }
     }
 
-    // Downsample the surrounding corner key frames (or map)
+    // 角点局部地图降采样，供 cornerOptimization() 建 KD-tree 做最近邻搜索。
     downSizeFilterCorner.setInputCloud(laserCloudCornerFromMap);
     downSizeFilterCorner.filter(*laserCloudCornerFromMapDS);
     laserCloudCornerFromMapDSNum = laserCloudCornerFromMapDS->size();
-    // Downsample the surrounding surf key frames (or map)
+
+    // 平面点局部地图降采样，供 surfOptimization() 建 KD-tree 做平面约束。
     downSizeFilterSurf.setInputCloud(laserCloudSurfFromMap);
     downSizeFilterSurf.filter(*laserCloudSurfFromMapDS);
     laserCloudSurfFromMapDSNum = laserCloudSurfFromMapDS->size();
 
-    // clear map cache if too large
+    // 缓存过大时清空，避免长时间运行内存持续增长。
     if (laserCloudMapContainer.size() > 1000)
         laserCloudMapContainer.clear();
 }
-
+//关键修改，根据gnss选择性提取地图点云，优化处
 void mapOptimization::extractCloud_GPS(pcl::PointCloud<PointType>::Ptr cloudToExtract)
 {
-    // fuse the map
+    // 构建 GPS 辅助局部地图。
+    //
+    // cloudToExtract 中的点同样代表关键帧位姿点，但这里希望它对应 GPS 辅助关键帧：
+    //   - x/y/z: GPS 辅助关键帧位置；
+    //   - intensity: 对应关键帧索引。
+    //
+    // 本函数使用 cloudKeyGPSPoses6D 中保存的 GPS 辅助位姿来变换历史关键帧点云，
+    // 生成 mode 2 中 scan-to-GPS-map 要匹配的局部地图。
+    //
+    // 和 extractCloud() 的区别：
+    //   - extractCloud() 使用 cloudKeyPoses6D，地图参考来自普通 LiDAR 优化轨迹；
+    //   - extractCloud_GPS() 使用 cloudKeyGPSPoses6D，地图参考来自 GPS 辅助轨迹；
+    //   - 所以 mode 2 对 GNSS/伪距误差更敏感，GPS 辅助位姿偏了会直接影响前端匹配。
+    //
+    // 输出结果：
+    //   - laserCloudCornerFromGPSMapDS: GPS 辅助角点局部地图；
+    //   - laserCloudSurfFromGPSMapDS: GPS 辅助平面点局部地图。
     laserCloudCornerFromGPSMap->clear();
     laserCloudSurfFromGPSMap->clear();
     ROS_INFO("last cloudKeyGPS time %.6lf", lastGPSpose_time);
     for (int i = 0; i < (int)cloudToExtract->size(); ++i)
     {
+        // 当前代码这里仍使用 cloudKeyPoses3D->back() 做距离筛选：
+        // 这表示用普通 LiDAR 当前关键帧位置来裁剪 GPS map 候选。
+        // 如果 mode 2 发散严重，可以考虑改为 cloudKeyGPSPoses3D->back() 并单独用 GPS keyframe 搜索邻域。
         if (pointDistance(cloudToExtract->points[i], cloudKeyPoses3D->back()) > surroundingKeyframeSearchRadius)
             continue;
 
+        // intensity 保存关键帧索引，用于读取 corner/surfCloudKeyFrames 和 cloudKeyGPSPoses6D。
         int thisKeyInd = (int)cloudToExtract->points[i].intensity;
 
+        // 只取最近一次 GPS 参考位姿 lastGPSpose_time 之后的 GPS 辅助关键帧。
+        // 这样构建的是以 lastGPSpose 为参考的局部相对 GPS map。
         if (cloudKeyGPSPoses6D->points[thisKeyInd].time >= lastGPSpose_time)
         {
             if (laserCloudMapContainerGPS.find(thisKeyInd) != laserCloudMapContainerGPS.end())
             {
-                // transformed cloud available
+                // 已经按 GPS 辅助位姿变换过的关键帧点云，直接从缓存取。
                 *laserCloudCornerFromGPSMap += laserCloudMapContainerGPS[thisKeyInd].first;
                 *laserCloudSurfFromGPSMap += laserCloudMapContainerGPS[thisKeyInd].second;
             }
             else
             {
-                // transformed cloud not available
+                // 缓存中没有时，使用 GPS 辅助关键帧位姿 cloudKeyGPSPoses6D 变换历史点云。
+                // 注意这里不是普通全局 LiDAR 优化位姿，而是 GPS 辅助相对位姿。
                 pcl::PointCloud<PointType> laserCloudCornerTemp =
                     *transformPointCloud(cornerCloudKeyFrames[thisKeyInd], &cloudKeyGPSPoses6D->points[thisKeyInd]);
                 pcl::PointCloud<PointType> laserCloudSurfTemp =
@@ -1424,18 +1484,20 @@ void mapOptimization::extractCloud_GPS(pcl::PointCloud<PointType>::Ptr cloudToEx
         }
     }
 
-    // Downsample the surrounding corner key frames (or map)
+    // GPS 辅助角点地图降采样，供 cornerOptimization_gps() 使用。
     downSizeFilterCorner.setInputCloud(laserCloudCornerFromGPSMap);
     downSizeFilterCorner.filter(*laserCloudCornerFromGPSMapDS);
-    // Downsample the surrounding surf key frames (or map)
+
+    // GPS 辅助平面点地图降采样，供 surfOptimization_gps() 使用。
     downSizeFilterSurf.setInputCloud(laserCloudSurfFromGPSMap);
     downSizeFilterSurf.filter(*laserCloudSurfFromGPSMapDS);
 
-    // clear map cache if too large
+    // GPS map 缓存过大时清空，避免长时间运行内存持续增长。
     if (laserCloudMapContainerGPS.size() > 1000)
         laserCloudMapContainerGPS.clear();
 }
 
+// 功能：入口函数，提取当前帧优化所需的周围关键帧局部地图。
 void mapOptimization::extractSurroundingKeyFrames()
 {
     if (cloudKeyPoses3D->points.empty() == true)
@@ -1451,6 +1513,7 @@ void mapOptimization::extractSurroundingKeyFrames()
     extractNearby();
 }
 
+// 功能：对当前帧原始点云、角点特征和平面点特征进行体素降采样。
 void mapOptimization::downsampleCurrentScan()
 {
 
@@ -1470,6 +1533,7 @@ void mapOptimization::downsampleCurrentScan()
     laserCloudSurfLastDSNum = laserCloudSurfLastDS->size();
 }
 
+// 功能：根据当前估计位姿 transformTobeMapped 更新点云到地图系的变换矩阵。
 void mapOptimization::updatePointAssociateToMap()
 {
     transPointAssociateToMap = trans2Affine3f(transformTobeMapped);
@@ -1478,6 +1542,7 @@ void mapOptimization::updatePointAssociateToMap()
 /***
  * 查找对应的特征点
  */
+// 功能：普通LiDAR map下的角点约束计算，为LM优化构造边线残差。
 void mapOptimization::cornerOptimization()
 {
     updatePointAssociateToMap();
@@ -1564,6 +1629,7 @@ void mapOptimization::cornerOptimization()
     }
 }
 
+// 功能：普通LiDAR map下的平面点约束计算，为LM优化构造点到平面残差。
 void mapOptimization::surfOptimization()
 {
     updatePointAssociateToMap();
@@ -1650,6 +1716,7 @@ void mapOptimization::surfOptimization()
 /***
 * 查找对应的特征点
 */
+// 功能：GPS辅助map下的角点约束计算，供 mode 2 的 scan-to-GPS-map 优化使用。
 void mapOptimization::cornerOptimization_gps()
 {
     updatePointAssociateToMap();
@@ -1740,6 +1807,7 @@ void mapOptimization::cornerOptimization_gps()
     }
 }
 
+// 功能：GPS辅助map下的平面点约束计算，供 mode 2 的 scan-to-GPS-map 优化使用。
 void mapOptimization::surfOptimization_gps()
 {
     updatePointAssociateToMap();
@@ -1823,6 +1891,7 @@ void mapOptimization::surfOptimization_gps()
     }
 }
 
+// 功能：合并角点和平面点残差/系数，形成一次LM迭代的统一约束集合。
 void mapOptimization::combineOptimizationCoeffs()
 {
     // combine corner coeffs
@@ -1862,6 +1931,7 @@ void mapOptimization::combineOptimizationCoeffs()
     std::fill(laserCloudOriSurfFlag.begin(), laserCloudOriSurfFlag.end(), false);
 }
 
+// 功能：执行一次Levenberg-Marquardt位姿优化迭代，更新 transformTobeMapped。
 bool mapOptimization::LMOptimization(int iterCount)
 {
     float srx = sin(transformTobeMapped[2]);
@@ -2003,6 +2073,7 @@ bool mapOptimization::LMOptimization(int iterCount)
     return false; // keep optimizing
 }
 
+// 功能：对roll/pitch/z等地面相关自由度施加额外约束，用于抑制姿态或高度漂移。
 void mapOptimization::GroundConstraint()
 {
     if (laserCloudGroundLast->points.size() > 50)
@@ -2139,6 +2210,7 @@ void mapOptimization::GroundConstraint()
 /***
  * 激光扫描数据SCAN直接与地图进行匹配
  */
+// 功能：普通scan-to-map优化，使用普通LiDAR局部地图修正当前帧位姿。
 void mapOptimization::scan2MapOptimization()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2177,6 +2249,7 @@ void mapOptimization::scan2MapOptimization()
     }
 }
 
+// 功能：GPS辅助scan-to-map优化，在GPS局部地图中匹配当前帧并组合回全局位姿。
 void mapOptimization::scan2GpsMapOptimization()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2272,6 +2345,7 @@ void mapOptimization::scan2GpsMapOptimization()
         transformTobeMapped[5]);
 }
 
+// 功能：融合IMU姿态信息并限制姿态/高度范围，更新最终 transformTobeMapped。
 void mapOptimization::transformUpdate()
 {
     if (cloudInfo.imuAvailable == true)
@@ -2312,6 +2386,7 @@ void mapOptimization::transformUpdate()
     incrementalOdometryAffineBack = trans2Affine3f(transformTobeMapped);
 }
 
+// 功能：把某个优化量限制在给定正负范围内，防止姿态或高度更新过大。
 float mapOptimization::constraintTransformation(float value, float limit)
 {
     if (value < -limit)
@@ -2322,6 +2397,7 @@ float mapOptimization::constraintTransformation(float value, float limit)
     return value;
 }
 
+// 功能：判断当前帧是否需要保存为关键帧，依据时间、运动量、GPS可用性和模式决定。
 bool mapOptimization::saveFrame()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2369,6 +2445,7 @@ bool mapOptimization::saveFrame()
 /***
  *
  */
+// 功能：向GTSAM图中加入普通LiDAR里程计因子或首帧先验因子。
 void mapOptimization::addOdomFactor()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2404,6 +2481,7 @@ void mapOptimization::addOdomFactor()
     }
 }
 
+// 功能：向GTSAM图中加入外部优化LiDAR位姿因子，通常用于已有 optlidarPose 的情况。
 void mapOptimization::addOptOdomFactor()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2440,6 +2518,7 @@ void mapOptimization::addOptOdomFactor()
     }
 }
 
+// 功能：把回环线程生成的回环约束加入GTSAM图优化。
 void mapOptimization::addLoopFactor()
 {
     if (loopIndexQueue.empty())
@@ -2460,6 +2539,7 @@ void mapOptimization::addLoopFactor()
     aLoopIsClosed = true;
 }
 
+// 功能：判断当前LiDAR时间附近是否有可用GPS时间戳，用于触发GPS关键帧/约束逻辑。
 bool mapOptimization::findGPSAvail(double curTime)
 {
     if (lidarAssociateMode == 1) return true;
@@ -2479,6 +2559,7 @@ bool mapOptimization::findGPSAvail(double curTime)
     return (fabs(delta_imu2gps) < 0.0015) || (fabs(delta_round) < 0.005);
 }
 
+// 功能：保存关键帧、添加图优化因子、更新iSAM、记录普通/GPS辅助关键帧位姿。
 void mapOptimization::saveKeyFramesAndFactor()
 {
     if (saveFrame() == false && lidarAssociateMode != 2)
@@ -2625,6 +2706,7 @@ void mapOptimization::saveKeyFramesAndFactor()
     updatePath(cloudKeyPoses6D->points.back());
 }
 
+// 功能：当发生回环或图优化更新后，回写所有关键帧位姿并更新轨迹。
 void mapOptimization::correctPoses()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2659,6 +2741,7 @@ void mapOptimization::correctPoses()
     }
 }
 
+// 功能：把最新关键帧位姿追加到ROS Path中，用于轨迹发布和可视化。
 void mapOptimization::updatePath(const PointTypePose& pose_in)
 {
     geometry_msgs::PoseStamped pose_stamped;
@@ -2700,6 +2783,7 @@ void mapOptimization::updatePath(const PointTypePose& pose_in)
     globalPath.poses.push_back(pose_stamped);
 }
 
+// 功能：把 float[6] 位姿转换成 nav_msgs::Odometry 消息。
 void mapOptimization::transformEiegn2Odom(double timestamp, nav_msgs::Odometry& laserOdometryROS, float transform[6])
 {
     laserOdometryROS.header.stamp = ros::Time().fromSec(timestamp);
@@ -2713,6 +2797,7 @@ void mapOptimization::transformEiegn2Odom(double timestamp, nav_msgs::Odometry& 
             transform[2]);
 }
 
+// 功能：设置输出路径，供地图、轨迹和调试文件保存使用。
 void mapOptimization::savePath(string path)
 {
     FILE* fp = fopen(path.c_str(), "w");
@@ -2725,6 +2810,7 @@ void mapOptimization::savePath(string path)
     fclose(fp);
 }
 
+// 功能：发布当前优化后的LiDAR里程计、增量里程计和TF变换。
 void mapOptimization::publishOdometry()
 {
     // Publish odometry for ROS (global)
@@ -2817,6 +2903,7 @@ void mapOptimization::publishOdometry()
     pubLaserOdometryIncremental.publish(laserOdomIncremental);
 }
 
+// 功能：发布关键帧点云、局部地图、路径等 mapping 结果供可视化和调试。
 void mapOptimization::publishFrames()
 {
     if (cloudKeyPoses3D->points.empty())
@@ -2882,6 +2969,7 @@ void mapOptimization::publishFrames()
     }
 }
 
+// 功能：发布当前帧LiDAR特征点云，便于查看角点/平面点提取和匹配输入。
 void mapOptimization::publishLidarFeature()
 {
     //    if (saveFrame() == false)

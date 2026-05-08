@@ -1,6 +1,6 @@
 <launch>
     <arg name="params" default="$(find glins)/config/params_20240129.yaml"/>
-    <arg name="bagpath" default="/data/lidar_imu_backup.bag"/>
+    <arg name="bagpath" default="/data/lidar_imu.bag"/>
     <arg name="imu_topic" default="/imu/data"/>
     <arg name="lidar_topic" default="/velodyne_points"/>
     <arg name="gps_week" default="2299"/>

@@ -728,14 +728,14 @@ public:
             mtxGpsInfo.unlock();
             return;
         }
-        if (!init_origin)
+        if (!init_origin)//如果没有初始化原点坐标，那么就用第一条有效的GNSS消息来初始化原点坐标
         {
             if (!useGroundTruthPos && gnss_msg->stat != 1)
             {
                 mtxGpsInfo.unlock();
                 return;
             }
-            if (useGroundTruthPos)
+            if (useGroundTruthPos)//如果使用地面真实位置来初始化原点坐标，那么就用GroundTruthPos来初始化原点坐标
             {
                 Eigen::Vector3d lla = GNSS_Tools::ecef2llh(GroundTruthPos);
                 lla_origin << lla[0], lla[1], lla[2];
