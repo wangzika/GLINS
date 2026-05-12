@@ -1,11 +1,12 @@
 <launch>
     <arg name="params" default="$(find glins)/config/params_20240129.yaml"/>
-    <arg name="bagpath" default="/data/lidar_imu.bag"/>
+    <arg name="bagpath" default="/data/lidar_imu_full.bag"/>
     <arg name="imu_topic" default="/imu/data"/>
     <arg name="lidar_topic" default="/velodyne_points"/>
     <arg name="gps_week" default="2299"/>
     <arg name="start_sec" default="111965"/>
-    <arg name="end_sec" default="112280"/>
+    <!-- <arg name="end_sec" default="112280"/> -->
+    <arg name="end_sec" default="113000"/>
     <arg name="output_path" default="/output/total.pos"/>
     <arg name="rtklib_config_path" default="$(find glins)/config/conf/20240129.conf"/>
     <arg name="fgo_path" default="/output/rtklib_fgo.pos"/>

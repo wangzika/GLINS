@@ -310,7 +310,8 @@ public:
 
 #if 1
                     gtsam::Vector var(Infos_Else.size());
-                    var.setConstant(0.1);
+                    var.setConstant(0.1);//wzb
+                    // var.setConstant(10);
                     noiseModel::Base::shared_ptr noise = noiseModel::Diagonal::Sigmas(var);
                     noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Huber::Create(1.0), noise);
 
