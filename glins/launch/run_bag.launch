@@ -1,22 +1,22 @@
 <launch>
     <arg name="params" default="$(find glins)/config/params_20240129.yaml"/>
-    <arg name="bagpath" default="/data/lidar_imu_backup.bag"/>
+    <arg name="bagpath" default="/home/ys/glins_ws/src/full_data/lidar_imu.bag"/>
     <arg name="imu_topic" default="/imu/data"/>
     <arg name="lidar_topic" default="/velodyne_points"/>
     <arg name="gps_week" default="2299"/>
     <arg name="start_sec" default="111965"/>
-    <arg name="end_sec" default="112280"/>
-    <arg name="output_path" default="/output/total.pos"/>
+    <arg name="end_sec" default="113000"/>
+    <arg name="output_path" default="/home/ys/glins_ws/output/total.pos"/>
     <arg name="rtklib_config_path" default="$(find glins)/config/conf/20240129.conf"/>
-    <arg name="fgo_path" default="/output/rtklib_fgo.pos"/>
-    <arg name="rviz" default="false"/>
+    <arg name="fgo_path" default="/home/ys/glins_ws/output/rtklib_fgo.pos"/>
+    <arg name="rviz" default="true"/>
     <arg name="robot_state_publisher" default="false"/>
     <arg name="rviz_config" default="$(find glins)/launch/include/config/vlp.rviz"/>
 
     <param name="use_sim_time" value="true"/>
     <rosparam file="$(arg params)" command="load"/>
 
-    <param name="glins/savePCDDirectory" type="string" value="/output/"/>
+    <param name="glins/savePCDDirectory" type="string" value="/home/ys/glins_ws/output/"/>
     <param name="glins/configDirectory" type="string" value="$(find glins)/config/"/>
     <param name="glins/sequence" type="string" value="MAP"/>
     <param name="glins/rtklibConfigPath" type="string" value="$(arg rtklib_config_path)"/>

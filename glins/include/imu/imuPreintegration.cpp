@@ -3,6 +3,9 @@
 #include "factor/NhcFactor.h"
 #include "gnss_tools.h"
 
+#include <cerrno>
+#include <cstring>
+#include <stdexcept>
 
 Eigen::Affine3f ParamServer::lastImuPreTransformation = pcl::getTransformation(0, 0, 0, 0, 0, 0);
 
@@ -216,6 +219,12 @@ IMUPreintegration::IMUPreintegration()
 
     result_path = fgoPath; //"/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/glins_ac.pos";
     fp = fopen(result_path.c_str(), "w");
+    if (fp == nullptr)
+    {
+        std::string error = "Failed to open GLINS output file '" + result_path + "': " + std::strerror(errno);
+        ROS_FATAL("%s", error.c_str());
+        throw std::runtime_error(error);
+    }
     // fp_debug = fopen("debug.log", "w");
     fprintf(fp, "%%  GPST              x-ecef(m)      y-ecef(m)      z-ecef(m)   Q  ns   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio\n");
     fflush(fp);
@@ -323,7 +332,8 @@ void IMUPreintegration::writeGPSfile2(gtime_t gpst, Vector3 ecef, int state, FIL
 
 void IMUPreintegration::closePosfile()
 {
-    fclose(fp);
+    if (fp != nullptr)
+        fclose(fp);
 }
 
 void IMUPreintegration::addLidarFactor()

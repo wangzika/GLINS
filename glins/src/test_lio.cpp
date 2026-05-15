@@ -151,16 +151,15 @@ int main(int argc, char** argv)
 
     bag.close();
 
-    visualizeMapThread.detach();
+    ros::shutdown();
+    if (visualizeMapThread.joinable())
+        visualizeMapThread.join();
 
     MO.savePath(output_path);
 
     MO.saveMapService();
 
     PT.closePosfile();
-    ros::spin();
-
-    //    ros::shutdown();
 
     return 0;
 }

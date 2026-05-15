@@ -595,17 +595,20 @@ bool mapOptimization::saveMapService(std_srvs::Empty::Request& req, std_srvs::Em
             << " ...";
     }
 
-    downSizeFilterCorner.setInputCloud(globalCornerCloud);
-    downSizeFilterCorner.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
-    downSizeFilterCorner.filter(*globalCornerCloudDS);
-    // down-sample and save surf cloud
-    downSizeFilterSurf.setInputCloud(globalSurfCloud);
-    downSizeFilterSurf.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
-    downSizeFilterSurf.filter(*globalSurfCloudDS);
+    pcl::VoxelGrid<PointType> saveMapCornerFilter;
+    pcl::VoxelGrid<PointType> saveMapSurfFilter;
 
-    downSizeFilterSurf.setInputCloud(globalRawCloud);
-    downSizeFilterSurf.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
-    downSizeFilterSurf.filter(*globalRawCloudDS);
+    saveMapCornerFilter.setInputCloud(globalCornerCloud);
+    saveMapCornerFilter.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
+    saveMapCornerFilter.filter(*globalCornerCloudDS);
+    // down-sample and save surf cloud
+    saveMapSurfFilter.setInputCloud(globalSurfCloud);
+    saveMapSurfFilter.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
+    saveMapSurfFilter.filter(*globalSurfCloudDS);
+
+    saveMapSurfFilter.setInputCloud(globalRawCloud);
+    saveMapSurfFilter.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
+    saveMapSurfFilter.filter(*globalRawCloudDS);
 
     // save global point cloud map
     //        *globalMapCloud += *globalCornerCloudDS;
@@ -646,17 +649,20 @@ bool mapOptimization::saveMapService()
             << " ...";
     }
 
-    downSizeFilterCorner.setInputCloud(globalCornerCloud);
-    downSizeFilterCorner.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
-    downSizeFilterCorner.filter(*globalCornerCloudDS);
-    // down-sample and save surf cloud
-    downSizeFilterSurf.setInputCloud(globalSurfCloud);
-    downSizeFilterSurf.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
-    downSizeFilterSurf.filter(*globalSurfCloudDS);
+    pcl::VoxelGrid<PointType> saveMapCornerFilter;
+    pcl::VoxelGrid<PointType> saveMapSurfFilter;
 
-    downSizeFilterSurf.setInputCloud(globalRawCloud);
-    downSizeFilterSurf.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
-    downSizeFilterSurf.filter(*globalRawCloudDS);
+    saveMapCornerFilter.setInputCloud(globalCornerCloud);
+    saveMapCornerFilter.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
+    saveMapCornerFilter.filter(*globalCornerCloudDS);
+    // down-sample and save surf cloud
+    saveMapSurfFilter.setInputCloud(globalSurfCloud);
+    saveMapSurfFilter.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
+    saveMapSurfFilter.filter(*globalSurfCloudDS);
+
+    saveMapSurfFilter.setInputCloud(globalRawCloud);
+    saveMapSurfFilter.setLeafSize(globalMapLeafSize, globalMapLeafSize, globalMapLeafSize);
+    saveMapSurfFilter.filter(*globalRawCloudDS);
 
     // save global point cloud map
     //        *globalMapCloud += *globalCornerCloudDS;
