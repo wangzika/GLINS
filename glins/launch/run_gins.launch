@@ -1,0 +1,21 @@
+<launch>
+    <arg name="param_file" default="$(find glins)/config/params_user.yaml"/>
+    <arg name="imu_bag" default="/home/ys/glins_ws/src/full_data/lidar_imu.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="start_week" default="0"/>
+    <arg name="start_sec" default="0.0"/>
+    <arg name="end_week" default="0"/>
+    <arg name="end_sec" default="0.0"/>
+
+    <rosparam file="$(arg param_file)" command="load"/>
+
+    <param name="glins/useLIO" value="false" type="bool"/>
+    <param name="glins/imuBagPath" value="$(arg imu_bag)" type="string"/>
+    <param name="glins/imuTopic" value="$(arg imu_topic)" type="string"/>
+    <param name="glins/startWeek" value="$(arg start_week)" type="int"/>
+    <param name="glins/startSec" value="$(arg start_sec)" type="double"/>
+    <param name="glins/endWeek" value="$(arg end_week)" type="int"/>
+    <param name="glins/endSec" value="$(arg end_sec)" type="double"/>
+
+    <node pkg="glins" type="glins_test_gins" name="glins_test_gins" output="screen"/>
+</launch>

@@ -47,7 +47,12 @@ public:
     {
         int i;
 
-        /* 注册 GNSS 结果发布接口 */
+        /*
+         * 注册 RTKLIB 内部发布器。
+         * rtkpos.cpp 每解算一个历元，会发布：
+         *   /gnss_raw    : rtklib::GNSS_Info，包含当前历元解、卫星观测、卫星状态等
+         *   /rtklib_odom : nav_msgs::Odometry，仅包含 ECEF 坐标形式的定位结果
+         */
         rtkposRegisterPub(nh);
         pntposRegisterPub(nh);
 
@@ -57,7 +62,14 @@ public:
         //        filopt = {""};	            // file option
         //        rtklibConfigPath = "/home/wangchuji/catkins_lidar/GLINS/config/conf/urban.conf";
 
-        /* 从配置文件读取系统参数和接收机/文件路径参数 */
+        /*
+         * 读取 RTKLIB 配置文件。
+         *
+         * rtklibConfigPath 来自 ROS 参数 glins/rtklibConfigPath，通常在 params_user.yaml 中配置。
+         * 这里分两次读取：
+         *   - sysopts：RTKLIB 标准解算参数，如 pos1-posmode、pos1-frequency、ant2-postype 等
+         *   - rcvopts：本项目额外定义的文件路径参数，如 inpstr1-path、outstr1-path
+         */
         if (!loadopts(rtklibConfigPath.c_str(), sysopts) || !loadopts(rtklibConfigPath.c_str(), rcvopts))
         {
             exit(1);
@@ -71,7 +83,14 @@ public:
         /* 先让每个 infile[i] 指向类内自带的固定缓存区 */
         for (i = 0;i < 10;i++) infile[i] = infile_[i];
 
-        /* 读取配置文件中的输入路径，填入前 3 个输入文件槽位 */
+        /*
+         * 读取配置文件中的输入路径，填入前 3 个输入文件槽位。
+         *
+         * 约定：
+         *   infile[0] <- inpstr1-path，通常是 rover.obs
+         *   infile[1] <- inpstr2-path，通常是 base.obs
+         *   infile[2] <- inpstr3-path，通常是广播星历 .rnx/.nav/.??p
+         */
         for (i = 0;i < 3;i++)
         {
             //            if(prcopt.mode==PMODE_SINGLE&&i==1) continue;
@@ -83,7 +102,7 @@ public:
             n++;                             // 记录当前有效输入文件数
         }
 
-        /* 输出结果文件路径来自配置项 outstr1-path */
+        /* 输出结果文件路径来自配置项 outstr1-path，例如 /home/ys/.../rtklib.pos。 */
         strcpy(outfile, strpath[4]);
 
         /* if you use the RTK mode, specify the position of the station (only used by RTKLIB)
@@ -113,7 +132,8 @@ public:
         //        ts = gpst2time(2233,8*3600+35*60+86400*6);
         //        te = gpst2time(2233,8*3600+55*60+86400*6);
 
-        /* 调用 RTKLIB 后处理主入口 postpos():
+        /*
+         * 调用 RTKLIB 后处理主入口 postpos():
          * - 读取输入观测/星历文件
          * - 按 prcopt 指定的策略执行定位解算
          * - 按 solopt 指定的格式输出结果到 outfile */

@@ -125,16 +125,16 @@ public:
                 /* thread for optimization */
         //        optimizationThread = std::thread(&gnssEstimator::solveOptimization,this);
                 /*publisher*/
-        pub_WLSENU = nh.advertise<nav_msgs::Path>("/WLS_path", 5000);
+        pub_WLSENU = nh.advertise<nav_msgs::Path>("/WLS_path", 5000);//WLS是基于当前epoch的GNSS观测值和上一个epoch的模糊度解算得到的位置信息，具有较大的噪声，主要用于对比展示。
 
-        pub_FGOENU = nh.advertise<nav_msgs::Path>("/FGOGlobalPath", 5000);
+        pub_FGOENU = nh.advertise<nav_msgs::Path>("/FGOGlobalPath", 5000);//
 
         pub_predict_ENU = nh.advertise<nav_msgs::Path>("/fgo_predict_path", 5000);
         /*subscriber*/
         sub_gnss_raw = nh.subscribe<rtklib::GNSS_Info>("gnss_raw", 100, &gnssEstimator::gnssInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
         Vector3 ecef_ref(prcopt.rb[0], prcopt.rb[1], prcopt.rb[2]);
-        ENU_ref << GNSS_Tools::ecef2llh(ecef_ref);
+        ENU_ref << GNSS_Tools::ecef2llh(ecef_ref);// 将ECEF坐标转换为经纬高坐标，作为ENU坐标系的参考点。
         //        ISAM2Params params;
         //        params.optimizationParams = ISAM2DoglegParams(1.0,1e-5,DoglegOptimizerImpl::TrustRegionAdaptationMode::ONE_STEP_PER_ITERATION);
         //        params.relinearizeThreshold = relinearizeThreshold;
@@ -143,10 +143,10 @@ public:
         //        params.factorization = ISAM2Params::QR;
         //
         //        optimizer = ISAM2(params);
-        resetOptimization();
+        resetOptimization();// 初始化优化器，设置优化参数，并清空因子图和初始估计值。
 
         //        rtkinit(&rtk,&prcopt);
-        GNSS_Tools::fgoinit(&fgo, &prcopt);
+        GNSS_Tools::fgoinit(&fgo, &prcopt);// 初始化RTKLIB的FGO结构体，准备进行GNSS数据处理和优化。
         prevAmb = VectorXd(NB(&prcopt)).setZero();
         ambCovariance = MatrixXd(NB(&prcopt), NB(&prcopt)).setZero();
         AmbFullArray = VectorXd(NB(&prcopt)).setZero();

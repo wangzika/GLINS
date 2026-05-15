@@ -25,7 +25,6 @@
 *                           add output of velocity estimation error in estvel()
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
-std::queue<GNSS_Epoch> gnss_buf;
 double para_Vel[1][3];
 #include <ros/ros.h>
 #include <sensor_msgs/image_encodings.h>

@@ -216,9 +216,16 @@ IMUPreintegration::IMUPreintegration()
 
     result_path = fgoPath; //"/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/glins_ac.pos";
     fp = fopen(result_path.c_str(), "w");
+    if (!fp)
+    {
+        ROS_ERROR("Unable to open FGO output file: %s", result_path.c_str());
+    }
     // fp_debug = fopen("debug.log", "w");
-    fprintf(fp, "%%  GPST              x-ecef(m)      y-ecef(m)      z-ecef(m)   Q  ns   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio\n");
-    fflush(fp);
+    if (fp)
+    {
+        fprintf(fp, "%%  GPST              x-ecef(m)      y-ecef(m)      z-ecef(m)   Q  ns   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio\n");
+        fflush(fp);
+    }
     // fprintf(fp_debug, "%%  GPST              x-ecef(m)      y-ecef(m)      z-ecef(m)   Q  ns   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio\n");
     // fflush(fp_debug);
     cornercloudMatch.reset(new pcl::PointCloud<PointType>());
@@ -299,6 +306,8 @@ void IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
 
 void IMUPreintegration::writeGPSfile(gtime_t gpst, Vector3 ecef, int state, FILE* file)
 {
+    if (!file)
+        return;
     int week;
     double weeksec = time2gpst(gpst, &week);
     fprintf(file, "%d %.3lf %.4lf %.4lf %.4lf %d %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.6lf %.6lf %.6lf %.6lf %.6lf %.6lf\n", week, weeksec, ecef(0), ecef(1), ecef(2), state,
@@ -311,6 +320,8 @@ void IMUPreintegration::writeGPSfile(gtime_t gpst, Vector3 ecef, int state, FILE
 
 void IMUPreintegration::writeGPSfile2(gtime_t gpst, Vector3 ecef, int state, FILE* file)
 {
+    if (!file)
+        return;
     int week;
     double weeksec = time2gpst(gpst, &week);
     fprintf(file, "%d %.3lf %.4lf %.4lf %.4lf %d %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.6lf %.6lf %.6lf %.6lf %.6lf %.6lf ", week, weeksec, ecef(0), ecef(1), ecef(2), state,
@@ -323,7 +334,8 @@ void IMUPreintegration::writeGPSfile2(gtime_t gpst, Vector3 ecef, int state, FIL
 
 void IMUPreintegration::closePosfile()
 {
-    fclose(fp);
+    if (fp)
+        fclose(fp);
 }
 
 void IMUPreintegration::addLidarFactor()

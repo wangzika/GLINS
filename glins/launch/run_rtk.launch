@@ -1,0 +1,34 @@
+<launch>
+    <arg name="param_file" default="$(find glins)/config/params_user.yaml"/>
+    <arg name="start_week" default="0"/>
+    <arg name="start_sec" default="0.0"/>
+    <arg name="end_week" default="0"/>
+    <arg name="end_sec" default="0.0"/>
+    <arg name="run_fgo" default="false"/>
+    <arg name="visualize" default="true"/>
+    <arg name="pos_file" default="/home/ys/glins_ws/src/数据/gnss/rtklib.pos"/>
+
+    <rosparam file="$(arg param_file)" command="load"/>
+
+    <param name="glins/startWeek" value="$(arg start_week)" type="int"/>
+    <param name="glins/startSec" value="$(arg start_sec)" type="double"/>
+    <param name="glins/endWeek" value="$(arg end_week)" type="int"/>
+    <param name="glins/endSec" value="$(arg end_sec)" type="double"/>
+    <param name="glins/runFgoOptimization" value="$(arg run_fgo)" type="bool"/>
+
+    <node pkg="glins" type="glins_test_rtk" name="glins_test_rtk" output="screen"/>
+
+    <node if="$(arg visualize)" name="map_child_tf_publisher" pkg="tf" type="static_transform_publisher"
+          args="0 0 0 0 0 0 map odom 100"/>
+    <node if="$(arg visualize)" pkg="glins" type="rtk_pos_path_publisher.py" name="rtk_pos_path_publisher"
+          output="screen">
+        <param name="pos_file" value="$(arg pos_file)" type="string"/>
+        <param name="frame_id" value="map" type="string"/>
+        <param name="publish_rate" value="1.0" type="double"/>
+        <rosparam param="allowed_quality">[1, 2]</rosparam>
+        <param name="min_sat" value="6" type="int"/>
+        <param name="max_std" value="50.0" type="double"/>
+        <param name="max_speed" value="30.0" type="double"/>
+    </node>
+    <node if="$(arg visualize)" pkg="rviz" type="rviz" name="rtk_rviz"/>
+</launch>

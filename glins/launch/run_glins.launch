@@ -1,0 +1,33 @@
+<launch>
+    <!-- <arg name="param_file" default="$(find glins)/config/params_user.yaml"/> -->
+    <arg name="param_file" default="$(find glins)/config/params_20240129_ubuntu.yaml"/>
+
+    <arg name="bagpath" default="/home/ys/glins_ws/src/full_data/lidar_imu.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="lidar_topic" default="/velodyne_points"/>
+    <arg name="lio_output" default=""/>
+    <arg name="start_week" default="0"/>
+    <arg name="start_sec" default="0.0"/>
+    <arg name="end_week" default="0"/>
+    <arg name="end_sec" default="0.0"/>
+
+    <param name="use_sim_time" value="true"/>
+    <rosparam file="$(arg param_file)" command="load"/>
+
+    <param name="glins/useLIO" value="true" type="bool"/>
+    <param name="glins/startWeek" value="$(arg start_week)" type="int"/>
+    <param name="glins/startSec" value="$(arg start_sec)" type="double"/>
+    <param name="glins/endWeek" value="$(arg end_week)" type="int"/>
+    <param name="glins/endSec" value="$(arg end_sec)" type="double"/>
+    <param name="glins/lioOutputPath" value="$(arg lio_output)" type="string"/>
+
+    <node pkg="glins" type="glins_test_lio" name="glins_test_lio" output="screen">
+        <param name="useRoslaunch" value="true" type="bool"/>
+        <param name="bagpath" value="$(arg bagpath)" type="string"/>
+        <param name="imu_topic" value="$(arg imu_topic)" type="string"/>
+        <param name="lidar_topic" value="$(arg lidar_topic)" type="string"/>
+    </node>
+    <node pkg="rviz" type="rviz" name="glins_rviz"
+        args="-d $(find glins)/launch/include/config/vlp.rviz"/>
+
+</launch>

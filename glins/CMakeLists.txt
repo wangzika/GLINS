@@ -23,6 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
         nav_msgs
         message_generation
         visualization_msgs
+        jsk_recognition_msgs
         rosbag
         rosbag_storage
         rtklib
@@ -97,6 +98,7 @@ catkin_package(
         message_runtime
         message_generation
         visualization_msgs
+        jsk_recognition_msgs
         rtklib
 )
 ###########
@@ -126,5 +128,4 @@ target_link_libraries(lio ${catkin_LIBRARIES} gflags gtsam OpenMP::OpenMP_CXX dw
 add_executable(${PROJECT_NAME}_test_lio src/test_lio.cpp)
 add_dependencies(${PROJECT_NAME}_test_lio ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(${PROJECT_NAME}_test_lio ${catkin_LIBRARIES}  gflags gtsam lio dw)
-
 

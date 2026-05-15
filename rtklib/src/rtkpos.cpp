@@ -112,6 +112,17 @@ ros::Publisher pub_raw;
 ros::Publisher pub_odom;
 extern void rtkposRegisterPub(ros::NodeHandle& n)
 {
+    /*
+     * RTKLIB 解算在 rtkpos.cpp 内部完成。为了让上层 glins 包继续使用每个历元的结果，
+     * 这里把 RTKLIB 的当前历元信息转成 ROS topic：
+     *
+     *   /gnss_raw
+     *     自定义消息 rtklib::GNSS_Info，包含 RTK 解、协方差、模糊度、
+     *     零差观测 ZD_Infos、单差观测 SD_Infos 等，供 GNSS/GINS/FGO 使用。
+     *
+     *   /rtklib_odom
+     *     标准 Odometry 消息，只放 ECEF 坐标，主要用于简单调试。
+     */
     pub_raw = n.advertise<rtklib::GNSS_Info>("/gnss_raw", 100);
     pub_odom = n.advertise<nav_msgs::Odometry>("/rtklib_odom", 100);
     //    ros::Duration(3.0).sleep();
@@ -2662,14 +2673,24 @@ static int relpos(rtk_t* rtk, const obsd_t* obs, int nu, int nr,
     satposs(time, obs, n, nav, opt->sateph, rs, dts, var, svh);
 
     rtklib::GNSS_Info epoch;
-    /// 保存数据
+    /*
+     * 组织当前历元的 ROS 消息。
+     *
+     * RTKLIB 内部数据结构比较紧凑，后续因子图优化需要更容易访问的字段，
+     * 所以这里把 rtk_t / obsd_t / ssat_t 等结构转换到 rtklib::GNSS_Info。
+     */
     {
         {
+            /* 当前 RTK 解：ECEF 位置、ECEF 速度、接收机钟差、基站 ECEF 坐标。 */
             memcpy(epoch.pos.data(), rtk->sol.rr, sizeof(double) * 3);
             memcpy(epoch.vel.data(), rtk->sol.rr + 3, sizeof(double) * 3);
             memcpy(epoch.dtr.data(), rtk->sol.dtr, sizeof(double) * 6);
             memcpy(epoch.base_pos.data(), rtk->rb, sizeof(double) * 3);
 
+            /*
+             * ZD_Infos：Zero Difference，零差观测。
+             * 每颗可见卫星一条，包含 rover 原始观测、卫星位置速度钟差、卫星状态。
+             */
             std::vector<rtklib::GNSS_Info_ZD> ZD_infos;
             for (i = 0; i < nu; i++)
             {
@@ -2972,7 +2993,11 @@ static int relpos(rtk_t* rtk, const obsd_t* obs, int nu, int nr,
         }
     }
 
-    // todo:FGO preprocessor
+    /*
+     * SD_Infos：Single Difference，单差观测。
+     * RTK 相对定位中 rover/base 同星观测组成一条单差信息，
+     * 后续 GNSS 因子图会用这些单差信息构造伪距、载波、多普勒约束。
+     */
     {
         std::vector<rtklib::GNSS_Info_SD> SD_infos;
         for (i = 0; i < ns; i++)
@@ -2984,7 +3009,7 @@ static int relpos(rtk_t* rtk, const obsd_t* obs, int nu, int nr,
             for (j = 0; j < nf; j++)
                 if (rtk->ssat[obsr.sat - 1].vsat[j] != 0)
                     vsat = true;
-            //            if(!vsat) continue;
+            // 保留所有匹配到的 rover/base 观测；是否作为有效因子由上层再按 vsat/SNR/slip 筛选。
             gnss_info.Mea_Rover = obs2msg(obsr);
             gnss_info.Mea_Base = obs2msg(obsb);
             rtklib::satdt satr, satb;
@@ -3163,6 +3188,11 @@ static int relpos(rtk_t* rtk, const obsd_t* obs, int nu, int nr,
             odometry.pose.pose.position.y = rtk->sol.rr[1];
             odometry.pose.pose.position.z = rtk->sol.rr[2];
             double posvar = (SQRT(epoch.var[0]) + SQRT(epoch.var[1]) + SQRT(epoch.var[2])) / 3;
+            /*
+             * 发布当前历元。
+             * 注意：这里默认不按 posvar 过滤，所以低质量浮点解也会发布；
+             * 可视化时应按 Q、卫星数、协方差和跳变再做过滤。
+             */
             // if (posvar < 3)
             {
                 pub_raw.publish(epoch);

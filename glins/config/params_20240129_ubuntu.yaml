@@ -15,16 +15,17 @@ glins:
   mapFrame: "map"
 
   # GPS Settings
-  useGPS: true
+  useGPS: false
   gpsFrequence: 1                            # set proper gps frequence to align gps and lidar timestamp
   useImuHeadingInitialization: true         # if using GPS data, set to "false"
-  useGpsElevation: false                      # if GPS elevation is bad, set to "false"
+  useGpsElevation: true                      # if GPS elevation is bad, set to "false"
   gpsCovThreshold: 8                        # m^2, threshold for using GPS data
   poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
-  useObs: true
-  useCarrier: true
-  rtklibConfigPath: /media/wangchuji/8ABAF32EBAF31583/GLINS/config/conf/20240129_ubuntu.conf
-  fgoPath: /media/wangchuji/T7/20240129/glins/1119.pos
+  useObs: false
+  useCarrier: false
+  rtklibConfigPath: /home/ys/glins_ws/src/GLINS/glins/config/conf/20240129_ubuntu.conf
+  # fgoPath: /media/wangchuji/T7/20240129/glins/1119.pos
+  fgoPath: /home/ys/glins_ws/src/数据/gnss/fgo.pos
 
 
   # debug setting
@@ -35,8 +36,8 @@ glins:
 
   # Export settings
   savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3
-  savePCDDirectory: "/media/wangchuji/T7/20240129/MAP/"        # actually we do not use the floder to save maps
-  configDirectory: "/media/wangchuji/T7/20240129/data/"
+  savePCDDirectory: "/home/ys/glins_ws/src/GLINS/glins/data/MAP/"        # actually we do not use the floder to save maps
+  configDirectory: "/home/ys/glins_ws/src/GLINS/glins/data/"
   sequence: "MAP"
 
   sensor: velodyne                            # lidar sensor type, 'velodyne' or 'ouster' or 'livox' or 'hesai'
@@ -45,7 +46,7 @@ glins:
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
   lidarMinRange: 3.0                          # default: 1.0, minimum lidar range to be used
   lidarMaxRange: 100.0
-  lidarAssociateMode: 2                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
+  lidarAssociateMode: 0                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
 
   # IMU Settings
   imuFrequence: 100

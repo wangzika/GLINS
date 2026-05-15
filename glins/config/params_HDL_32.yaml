@@ -24,7 +24,9 @@ glins:
   useObs: true
   useCarrier: true
   useGroundTruthHeading: true
-  rtklibConfigPath: /home/wangchuji/catkins_lidar/GLINS/config/conf/Urban_medium.conf
+  # rtklibConfigPath: /home/wangchuji/catkins_lidar/GLINS/config/conf/Urban_medium.conf
+  # rtklibConfigPath: /home/wangchuji/catkins_lidar/GLINS/config/conf/Urban_medium.conf
+  rtklibConfigPath: /home/ys/glins_ws/src/GLINS/glins/config/conf/Urban_medium.conf
 
   # debug setting
   debugLidarTimestamp: false

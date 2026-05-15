@@ -9,22 +9,25 @@
 #include "mapping/mapOptmizationGps.h"
 #include "rosbag/bag_player.h"
 #include "rosgraph_msgs/Clock.h"
+#if defined(__has_include) && __has_include(<backward.hpp>)
 #define BACKWARD_HAS_DW 1
-#include "backward.hpp"
+#include <backward.hpp>
 namespace backward
 {
     backward::SignalHandling sh;
 }
+#endif
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "lio");
 
-    string GPSfile = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/test.pos";
     string bagpath;
     string imu_topic;
     string lidar_topic;
+    string lio_output_path;
     bool useRoslaunch = false;
     ros::NodeHandle nh("~");
+    ros::NodeHandle nh_global;
     nh.getParam("useRoslaunch", useRoslaunch);
     if (!useRoslaunch && argv[1] && argv[2] && argv[3])
     {
@@ -58,8 +61,20 @@ int main(int argc, char** argv)
     // gtime_t ts = gpst2time(2129,181347);
     // gtime_t te = gpst2time(2129,182154);
 
-    gtime_t ts = gpst2time(2350, 117500);///117500
-    gtime_t te = gpst2time(2350, 118300);
+    int start_week = 0;
+    int end_week = 0;
+    double start_sec = 0.0;
+    double end_sec = 0.0;
+    nh_global.param<int>("glins/startWeek", start_week, 0);
+    nh_global.param<double>("glins/startSec", start_sec, 0.0);
+    nh_global.param<int>("glins/endWeek", end_week, start_week);
+    nh_global.param<double>("glins/endSec", end_sec, 0.0);
+    nh_global.param<string>("glins/lioOutputPath", lio_output_path, string(""));
+
+    gtime_t ts = start_week > 0 ? gpst2time(start_week, start_sec) : gtime_t{0};
+    gtime_t te = end_week > 0 && end_sec > 0.0 ? gpst2time(end_week, end_sec) : gtime_t{0};
+    bool has_start_time = start_week > 0;
+    bool has_end_time = end_week > 0 && end_sec > 0.0;
 
     // 20250120_3
     // gtime_t ts = gpst2time(2350, 120671);//120562);120710 120671
@@ -104,9 +119,9 @@ int main(int argc, char** argv)
     int i = 0;
     BOOST_FOREACH(const rosbag::MessageInstance m, view)
     {
-        if (m.getTime().toSec() < ((double)ts.time + ts.sec - 18 - 0.005))
+        if (has_start_time && m.getTime().toSec() < ((double)ts.time + ts.sec - 18 - 0.005))
             continue;
-        if (m.getTime().toSec() > ((double)te.time + te.sec - 18))
+        if (has_end_time && m.getTime().toSec() > ((double)te.time + te.sec - 18))
             break;
         const sensor_msgs::PointCloud2ConstPtr& cloud = m.instantiate<sensor_msgs::PointCloud2>();
         if (cloud)
@@ -135,7 +150,8 @@ int main(int argc, char** argv)
 
     visualizeMapThread.detach();
 
-    MO.savePath("/mnt/i/20240129/total.pos");
+    if (!lio_output_path.empty())
+        MO.savePath(lio_output_path);
 
     MO.saveMapService();
 

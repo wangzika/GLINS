@@ -1,0 +1,133 @@
+glins:
+
+  pointCloudTopic: "velodyne_points"
+  imuTopic: "imu/data"
+  odomTopic: "odometry/imu"
+  gpsTopic: "gps_odom"
+
+  lidarFrame: "base_link"
+  baselinkFrame: "base_link"
+  odometryFrame: "odom"
+  mapFrame: "map"
+
+  useGPS: true
+  gpsFrequence: 1
+  useImuHeadingInitialization: true
+  useGpsElevation: false
+  gpsCovThreshold: 8
+  poseCovThreshold: 25.0
+  useObs: true
+  useCarrier: true
+  rtklibConfigPath: /home/ys/glins_ws/src/GLINS/glins/config/conf/user_rtk.conf
+  fgoPath: /home/ys/glins_ws/src/数据/gnss/fgo.pos
+
+  debugLidarTimestamp: false
+  debugImu: false
+  debugGps: false
+  addoptPose: true
+
+  savePCD: false
+  savePCDDirectory: "/home/ys/glins_ws/src/数据/map/"
+  configDirectory: "/home/ys/glins_ws/src/数据/"
+  sequence: "MAP"
+
+  sensor: velodyne
+  N_SCAN: 16
+  Horizon_SCAN: 1800
+  downsampleRate: 1
+  lidarMinRange: 3.0
+  lidarMaxRange: 100.0
+  lidarAssociateMode: 2
+  coupleMode: 0
+
+  imuFrequence: 100
+  imuAccNoise: 1.66666666667e-03
+  imuGyrNoise: 8.72664625997e-04
+  imuAccBiasN: 1.0e-02
+  imuGyrBiasN: 1.939254724e-03
+  imuGravity: 9.79338
+  imuRPYWeight: 0.00
+  useNHC: true
+  useLIO: false
+  NHCnoise: [1.0, 1.0]
+  thres_angular_velocity: 5.0
+
+  useGroundTruthHeading: true
+  GroundTruthRoll: 0.0
+  GroundTruthPitch: 0.0
+  GroundTruthHeading: 0.0
+  useGroundTruthPos: false
+  GroundTruthPos: [0.0, 0.0, 0.0]
+
+  imuType: 0
+  extrinsicTrans: [0.0, 0.0, 0.0]
+  extrinsicRot: [1, 0, 0,
+                 0, 1, 0,
+                 0, 0, 1]
+  extrinsicRPY: [1, 0, 0,
+                 0, 1, 0,
+                 0, 0, 1]
+  estimateExtGPS: false
+  extrinsicGPS: [0.0, 0.0, 0.0]
+
+  edgeThreshold: 1.0
+  surfThreshold: 0.1
+  edgeFeatureMinValidNum: 10
+  surfFeatureMinValidNum: 100
+
+  odometrySurfLeafSize: 0.4
+  mappingCornerLeafSize: 0.2
+  mappingSurfLeafSize: 0.4
+
+  z_tollerance: 15
+  rotation_tollerance: 1000
+
+  numberOfCores: 4
+  mappingProcessInterval: 0.09
+
+  surroundingkeyframeAddingDistThreshold: 1.0
+  surroundingkeyframeAddingAngleThreshold: 0.2
+  surroundingKeyframeDensity: 2.0
+  surroundingKeyframeSearchRadius: 20.0
+
+  loopClosureEnableFlag: true
+  loopClosureFrequency: 1.0
+  surroundingKeyframeSize: 30
+  historyKeyframeSearchRadius: 25.0
+  historyKeyframeSearchTimeDiff: 25.0
+  historyKeyframeSearchNum: 25
+  historyKeyframeFitnessScore: 0.9
+
+  globalMapVisualizationSearchRadius: 1000.0
+  globalMapVisualizationPoseDensity: 10.0
+  globalMapVisualizationLeafSize: 0.5
+  globalMapLeafSize: 1.0
+
+save_flag: true
+
+sensor_height: 1.723
+mode: "czm"
+verbose: false
+visualize: true
+num_iter: 3
+num_lpr: 20
+num_min_pts: 10
+th_seeds: 0.3
+th_dist: 0.125
+th_seeds_v: 0.25
+th_dist_v: 0.1
+max_r: 80.0
+min_r: 2.7
+uprightness_thr: 0.707
+adaptive_seed_selection_margin: -1.2
+czm:
+  num_zones: 4
+  num_sectors_each_zone: [16, 32, 54, 32]
+  mum_rings_each_zone: [2, 4, 4, 4]
+  elevation_thresholds: [0.0, 0.0, 0.0, 0.0]
+  flatness_thresholds: [0.0, 0.0, 0.0, 0.0]
+enable_RNR: true
+enable_RVPF: true
+enable_TGR: true
+RNR_ver_angle_thr: -15.0
+RNR_intensity_thr: 0.2

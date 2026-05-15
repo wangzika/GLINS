@@ -33,12 +33,14 @@ using gtsam::symbol_shorthand::T;
 using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using gtsam::symbol_shorthand::X; // Pose3 (x,y,z,r,p,y)
 typedef pair<nav_msgs::Odometry, rtklib::GNSS_Info> GNSSPose;
+#if defined(__has_include) && __has_include(<backward.hpp>)
 #define BACKWARD_HAS_DW 1
-#include "backward.hpp"
+#include <backward.hpp>
 namespace backward
 {
     backward::SignalHandling sh;
 }
+#endif
 // static int test_sys(int sys, int m) {
 //     switch (sys) {
 //         case SYS_GPS:
@@ -313,42 +315,53 @@ public:
 
     void run()
     {
-        //        string GPSfile = "/home/wangchuji/catkins_gnss/OB_GINS-main/dataset/GNSS_RTK.pos";
-        //        string IMUfile = "/home/wangchuji/catkins_gnss/OB_GINS-main/dataset/ADIS16465.txt";
-
         string imu_topic = "/imu/data";
+        string IMUbag;
+        string LIOfile;
+        string incre_path;
+        nh.param<string>("glins/imuTopic", imu_topic, imu_topic);
+        nh.param<string>("glins/imuBagPath", IMUbag, string(""));
+        nh.param<string>("glins/lioPosePath", LIOfile, string(""));
+        nh.param<string>("glins/incrementPath", incre_path, string(""));
         topics.push_back(imu_topic);
 
-        //        string GPSfile = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/test.pos";
-        //        string IMUfile = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/imu/xsense_imu.txt";
-        //        string IMUfile = "/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/GNSS_INS_Data/urban/imu_adis16465.txt";
-        string IMUfile = "/mnt/i/20240705/imu_adis16465.txt";
+        if (IMUbag.empty())
+        {
+            ROS_ERROR("glins/imuBagPath is empty");
+            return;
+        }
 
-        result_path = fgoPath; //"/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/GNSS_INS_Data/urban/gins_amb_ac.pos";
-        //        string IMUbag = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/lidar_imu_backup.bag";
-        //        string IMUbag = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Data20200314/HK20200314.bag";
-        //        string IMUbag = "/media/wangchuji/T7/20231202/mems_.bag";
-        //        string IMUbag = "/media/wangchuji/T7/20240129/imu/mems.bag";
-        // string IMUbag = "/mnt/i/20240129/imu/mems.bag";
-        // string IMUbag = "/mnt/i/GREATWHUdata/campus-02/cp_02.bag";
-        // string IMUbag = "/mnt/i/20250120/urban_01/1624_filtered.bag";
-        // string IMUbag = "/mnt/i/20250120/urban_03/1719_filtered.bag";
-        string IMUbag = "/mnt/i/HKdataset/UrbanNav-HK_Whampoa-20210517_sensors/UrbanNav-HK_Whampoa-20210521_sensors.bag";
-        //        string IMUbag = "/media/wangchuji/T7/20221029/imu_adis16465.bag";
-        //        result_path = "/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/hk1/gins_amb_ac.pos";
+        result_path = fgoPath;
         fp = fopen(result_path.c_str(), "w");
-        // fp_incre = fopen("/mnt/i/20240129/imu/incre.txt", "w");
-        // fp_incre = fopen("/mnt/i/20250120/urban_01/incre.txt", "w");
-        fp_incre = fopen("/mnt/i/20250120/urban_03/incre.txt", "w");
+        if (!fp)
+        {
+            ROS_ERROR("Unable to open output file: %s", result_path.c_str());
+            return;
+        }
         fprintf(fp, "%%  GPST              x-ecef(m)      y-ecef(m)      z-ecef(m)   Q  ns   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio\n");
-        /// 改成用文件读取数据
-        // loadLIOpos("/mnt/i/20240705/lidar_BLH.txt");
-        // loadLIOpos("/mnt/i/GREATWHUdata/campus-02/cp_02_lidar.pos");
-        // loadLIOpos("/mnt/i/20240129/final/lio_fgo.pos");
-        // loadLIOpos("/mnt/i/20250120/urban_01/lio.pos");
-        loadLIOpos("/mnt/i/20250120/urban_03/lio.pos");
-        //        loadGPSfile(GPSfile);
-        //    loadIMUfile(IMUfile);
+
+        if (useLIO)
+        {
+            if (LIOfile.empty())
+            {
+                ROS_ERROR("glins/useLIO is true, but glins/lioPosePath is empty");
+                fclose(fp);
+                return;
+            }
+            if (incre_path.empty())
+            {
+                incre_path = result_path + ".incre";
+            }
+            fp_incre = fopen(incre_path.c_str(), "w");
+            if (!fp_incre)
+            {
+                ROS_ERROR("Unable to open increment output file: %s", incre_path.c_str());
+                fclose(fp);
+                return;
+            }
+            loadLIOpos(LIOfile);
+        }
+
         loadIMUbag(IMUbag);
         fclose(fp);
     }
@@ -491,11 +504,13 @@ public:
             if (!lioqueue.empty())
             {
                 Pose3 increPose = lioqueue.back().pose.between(frame.pose);
-                fprintf(fp_incre, "%d %.3lf %.5lf %.5lf %.5lf %.5lf %.5lf %.5lf\n", frame.week, frame.weeksec, increPose.x(), increPose.y(), increPose.z(), increPose.rotation().roll() * 180 / M_PI, increPose.rotation().pitch() * 180 / M_PI, increPose.rotation().yaw() * 180 / M_PI);
+                if (fp_incre)
+                    fprintf(fp_incre, "%d %.3lf %.5lf %.5lf %.5lf %.5lf %.5lf %.5lf\n", frame.week, frame.weeksec, increPose.x(), increPose.y(), increPose.z(), increPose.rotation().roll() * 180 / M_PI, increPose.rotation().pitch() * 180 / M_PI, increPose.rotation().yaw() * 180 / M_PI);
             }
             lioqueue.push_back(frame);
         }
-        fclose(fp_incre);
+        if (fp_incre)
+            fclose(fp_incre);
     }
 
     void loadIMUbag(string IMUfile)
@@ -510,9 +525,9 @@ public:
             if (m.getTime().toSec() > ((double)te.time + te.sec - 18))
                 break;
             sensor_msgs::Imu::Ptr imuMsg = m.instantiate<sensor_msgs::Imu>();
-            imuMsg->header.stamp.fromSec(imuMsg->header.stamp.toSec());
             if (imuMsg)
             {
+                imuMsg->header.stamp.fromSec(imuMsg->header.stamp.toSec());
                 imuHandler(imuMsg);
             }
         }
@@ -745,9 +760,14 @@ public:
 
             Pose3 lidarPose;
             bool useable;
-            Pose3 increPose = lastlioframe.pose.between(curlioframe.pose);
+            Pose3 increPose;
+            double d_yaw = 0.0;
+            if (useLIO)
+            {
+                increPose = lastlioframe.pose.between(curlioframe.pose);
+                d_yaw = fabs(curlioframe.pose.rotation().yaw() * 180 / M_PI - lastlioframe.pose.rotation().yaw() * 180 / M_PI);
+            }
             lidarPose = prevState_.pose().compose(increPose);
-            double d_yaw = fabs(curlioframe.pose.rotation().yaw() * 180 / M_PI - lastlioframe.pose.rotation().yaw() * 180 / M_PI);
             if (useLIO)
             {
                 gtsam::noiseModel::Diagonal::shared_ptr noise_model = gtsam::noiseModel::Diagonal::Sigmas(Vector3(0.04, 0.04, 0.03));
@@ -1071,6 +1091,7 @@ public:
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "roboat_loam");
+    ros::NodeHandle nh;
 
     time_t t_start, t_end;
 
@@ -1109,9 +1130,17 @@ int main(int argc, char** argv)
     // gtime_t ts = gpst2time(2350, 120671); //120562
     // gtime_t te = gpst2time(2350, 122400);
 
-    // hk
-    gtime_t ts = gpst2time(2158, 455346); //120562
-    gtime_t te = gpst2time(2158, 456878); 
+    int start_week = 0;
+    int end_week = 0;
+    double start_sec = 0.0;
+    double end_sec = 0.0;
+    nh.param<int>("glins/startWeek", start_week, 0);
+    nh.param<double>("glins/startSec", start_sec, 0.0);
+    nh.param<int>("glins/endWeek", end_week, start_week);
+    nh.param<double>("glins/endSec", end_sec, 0.0);
+
+    gtime_t ts = start_week > 0 ? gpst2time(start_week, start_sec) : gtime_t{0};
+    gtime_t te = end_week > 0 && end_sec > 0.0 ? gpst2time(end_week, end_sec) : gtime_t{0};
     gins.set_time(ts, te);
 
     processor.decode(ts, te);
