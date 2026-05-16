@@ -15,14 +15,14 @@ glins:
   mapFrame: "map"
 
   # GPS Settings
-  useGPS: false
+  useGPS: true
   gpsFrequence: 1                             # set proper gps frequence to align gps and lidar timestamp
   useImuHeadingInitialization: true           # if using GPS data, set to "false"
   useGpsElevation: false                      # if GPS elevation is bad, set to "false"
   gpsCovThreshold: 8                          # m^2, threshold for using GPS data
   poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
-  useObs: false
-  useCarrier: false
+  useObs: true
+  useCarrier: true
   rtklibConfigPath: /catkin_ws/src/glins/config/conf/20240129.conf
   fgoPath: /output/rtklib_fgo.pos
 
@@ -45,7 +45,7 @@ glins:
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
   lidarMinRange: 3.0                          # default: 1.0, minimum lidar range to be used
   lidarMaxRange: 100.0
-  lidarAssociateMode: 0                      # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
+  lidarAssociateMode: 2                      # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
   coupleMode: 1
 
   # IMU Settings
@@ -63,9 +63,9 @@ glins:
 
   # initial Settings
   useGroundTruthHeading: true
-  GroundTruthRoll:  0.9921107997 #-0.6302191972
-  GroundTruthPitch: -0.2055085020 # 0.5555055007
-  GroundTruthHeading: 48.7383458570  #-82.2318939742
+  GroundTruthRoll:  -0.4167293931 #-0.6302191972
+  GroundTruthPitch: -0.2400005612 # 0.5555055007
+  GroundTruthHeading: 94.2041584472  #-82.2318939742
   useGroundTruthPos: true
   GroundTruthPos: [-2267128.6550,5009529.1573,3221136.8046] #[-2265231.2559 ,  5012249.2817  , 3218232.9869] [ -2265230.2175,5012284.7224,3218179.9799 ]
 
@@ -108,7 +108,7 @@ glins:
   surroundingKeyframeSearchRadius: 20.0         # meters, within n meters scan-to-map optimization (when loop closure disabled)
 
   # Loop closure
-  loopClosureEnableFlag: true
+  loopClosureEnableFlag: false
   loopClosureFrequency: 1.0                     # Hz, regulate loop closure constraint add frequency
   surroundingKeyframeSize: 30                   # submap size (when loop closure enabled)
   historyKeyframeSearchRadius: 25.0             # meters, key frame that is within n meters from current pose will be considerd for loop closure

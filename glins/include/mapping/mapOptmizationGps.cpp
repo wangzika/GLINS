@@ -2249,6 +2249,19 @@ void mapOptimization::scan2GpsMapOptimization()
     }
     dPose = trans2gtsamPose(transformTobeMapped);
     Pose3 increPose = lastGPSpose.compose(dPose);
+    Pose3 curPose = trans2gtsamPose(tmptransformTobeMapped);
+    Pose3 gpsAssocDelta = curPose.between(increPose);
+    double gpsAssocTrans = gpsAssocDelta.translation().norm();
+    double gpsAssocRot = gtsam::Rot3::Logmap(gpsAssocDelta.rotation()).norm();
+    if (gpsAssocTrans > 5.0 || gpsAssocRot > 0.35)
+    {
+        ROS_WARN("Reject GPS lidar association at %.6lf: trans %.3lf m rot %.3lf rad",
+            timeLaserInfoCur, gpsAssocTrans, gpsAssocRot);
+        laserCornerCloudMatch->clear();
+        laserSurfCloudMatch->clear();
+        memcpy(transformTobeMapped, tmptransformTobeMapped, sizeof(float) * 6);
+        return;
+    }
     // gtsamPose2trans(increPose, tmptransformTobeMapped);
     tmptransformTobeMapped[0] = constraintTransformation(tmptransformTobeMapped[0], rotation_tollerance);
     tmptransformTobeMapped[1] = constraintTransformation(tmptransformTobeMapped[1], rotation_tollerance);
@@ -2469,6 +2482,8 @@ void mapOptimization::addLoopFactor()
 bool mapOptimization::findGPSAvail(double curTime)
 {
     if (lidarAssociateMode == 1) return true;
+    if (gnssOdomQueue.empty()) return false;
+
     double curgnssTime = gnssOdomQueue.front().header.stamp.toSec();
     double delta_imu2gps = curTime - curgnssTime;
     double delta_round = curTime - round(curTime);
@@ -2477,12 +2492,18 @@ bool mapOptimization::findGPSAvail(double curTime)
         while (!gnssOdomQueue.empty())
         {
             gnssOdomQueue.pop_front();
+            if (gnssOdomQueue.empty()) return false;
             curgnssTime = gnssOdomQueue.front().header.stamp.toSec();
             delta_imu2gps = curTime - curgnssTime;
             if (delta_imu2gps <= 0) break;
         }
     }
-    return (fabs(delta_imu2gps) < 0.0015) || (fabs(delta_round) < 0.005);
+
+    const bool syncedWithGnss = fabs(delta_imu2gps) < 0.0015;
+    if (lidarAssociateMode == 2)
+        return syncedWithGnss;
+
+    return syncedWithGnss || (fabs(delta_round) < 0.005);
 }
 
 void mapOptimization::saveKeyFramesAndFactor()
@@ -2543,7 +2564,7 @@ void mapOptimization::saveKeyFramesAndFactor()
     /// used for gps fusion
     if (cloudKeyPoses3D->empty() || findGPSAvail(timeLaserInfoCur))
     {
-        Pose3 betweenPose_new = latestEstimate.between(lastGPSpose);
+        Pose3 betweenPose_new = lastGPSpose.between(latestEstimate);
         thisPose6D.x = betweenPose_new.translation().x();
         thisPose6D.y = betweenPose_new.translation().y();
         thisPose6D.z = betweenPose_new.translation().z();

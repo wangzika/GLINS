@@ -15,7 +15,7 @@ glins:
   mapFrame: "map"
 
   # GPS Settings
-  useGPS: false
+  useGPS: true
   gpsFrequence: 1                             # set proper gps frequence to align gps and lidar timestamp
   useImuHeadingInitialization: true           # if using GPS data, set to "false"
   useGpsElevation: false                      # if GPS elevation is bad, set to "false"
@@ -23,9 +23,8 @@ glins:
   poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
   useObs: true
   useCarrier: true
-  rtklibConfigPath: /mnt/f/GLINS/config/conf/gwhu.conf
-  fgoPath: /mnt/i/GREATWHUdata/campus-02/cp_02_nhc.pos
-
+  rtklibConfigPath: /catkin_ws/src/glins/config/conf/20240129.conf
+  fgoPath: /output/rtklib_fgo.pos
 
   # debug setting
   debugLidarTimestamp: true
@@ -35,8 +34,10 @@ glins:
 
   # Export settings
   savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3
-  savePCDDirectory: "/mnt/f/GLINS/data/MAP/"  # actually we do not use the floder to save maps
-  configDirectory: "/mnt/f/GLINS/data/"
+  # savePCDDirectory: "/mnt/f/GLINS/data/MAP/"  # actually we do not use the floder to save maps
+  # configDirectory: "/mnt/f/GLINS/data/"
+  savePCDDirectory: "/output/"  # container output directory
+  configDirectory: "/catkin_ws/src/glins/config/"
   sequence: "MAP"
 
   sensor: velodyne                            # lidar sensor type, 'velodyne' or 'ouster' or 'livox' or 'hesai'
@@ -45,32 +46,51 @@ glins:
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
   lidarMinRange: 3.0                          # default: 1.0, minimum lidar range to be used
   lidarMaxRange: 100.0
-  lidarAssociateMode: 2                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
+  lidarAssociateMode: 0                       # 0: scan-to-map matching, 1: scan-to-scan matching, 2: scan-to-scan matching with gps
   coupleMode: 1                               # 0: loosely coupled mode, 1: tightly coupled mode
 
-  # IMU Settings
+  # IMU Settings  #original
+  # imuFrequence: 100
+  # imuAccNoise: 1.5e-2
+  # imuGyrNoise: 3.9e-4
+  # imuAccBiasN: 3.0e-3
+  # imuGyrBiasN: 9.6e-5
+  # imuGravity:  9.79338
+  # imuRPYWeight: 0.01
+ 
   imuFrequence: 100
-  imuAccNoise: 1.5e-2
-  imuGyrNoise: 3.9e-4
-  imuAccBiasN: 3.0e-3
-  imuGyrBiasN: 9.6e-5
+  imuAccNoise: 1.66666666667e-03
+  imuGyrNoise: 8.72664625997e-04
+  imuAccBiasN: 1.0e-02
+  imuGyrBiasN: 1.939254724e-03
   imuGravity:  9.79338
-  imuRPYWeight: 0.01
+  imuRPYWeight: 0.00
+
   useNHC: true
-  useLIO: false
+  useLIO: true
   NHCnoise: [0.1, 0.3]
   thres_angular_velocity: 5.0
 
   # initial Settings
+  # useGroundTruthHeading: true
+  # GroundTruthRoll:  -0.4167293931 #-0.6302191972
+  # GroundTruthPitch: -0.2400005612 # 0.5555055007
+  # GroundTruthHeading: 94.2041584472  #-82.2318939742
+
+
   useGroundTruthHeading: true
-  GroundTruthRoll:  -0.4167293931 #-0.6302191972
-  GroundTruthPitch: -0.2400005612 # 0.5555055007
-  GroundTruthHeading: 94.2041584472  #-82.2318939742
+  GroundTruthRoll:  0.9921107997 #-0.6302191972
+  GroundTruthPitch: -0.2055085020 # 0.5555055007
+  GroundTruthHeading: 48.7383458570  #-82.2318939742
+  useGroundTruthPos: true
+  GroundTruthPos: [-2267128.6550,5009529.1573,3221136.8046] #[-2265231.2559 ,  5012249.2817  , 3218232.9869] [ -2265230.2175,5012284.7224,3218179.9799 ]
+
 
   # Extrinsics (lidar -> IMU)
   imuType: 0   # 0: 6a
 
-  extrinsicTrans: [  -0.005,-0.068, 0.469 ]
+  # extrinsicTrans: [  -0.005,-0.068, 0.469 ] original
+  extrinsicTrans: [ 0.175, -0.263, 0.305 ]
   extrinsicRot: [ 1, 0, 0,
                   0, 1, 0,
                   0, 0, 1 ]
@@ -80,8 +100,11 @@ glins:
   extrinsicRPY: [ 1, 0, 0,
                   0, 1, 0,
                   0, 0, 1 ]
-  estimateExtGPS: false
-  extrinsicGPS: [ -0.050, -0.650, 0.150 ]
+  estimateExtGPS: true
+  # extrinsicGPS: [ -0.050, -0.650, 0.150 ] oringinal
+
+  extrinsicGPS: [ 0.005, -0.556, 0.398 ]
+
 
   # LOAM feature threshold
   edgeThreshold: 1.0

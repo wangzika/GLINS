@@ -266,10 +266,10 @@ void IMUPreintegration::resetParams()
     systemInitialized = false;
 }
 
-void IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
+bool IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
 {
     if (container.checkIsEmpty())
-        return;
+        return false;
 
     if (container.syncObs(lastImuT_opt, 0.015))
     {
@@ -295,15 +295,17 @@ void IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
             graphValues.insert(T(key), extGPS);
             gtsam::PriorFactor<Vector3> priorExtGPS(T(key), extGPS, priorExtNoise);
             graphFactors.add(priorExtGPS);
-            if (systemInitialized)
+            if (systemInitialized && optimizer.valueExists(T(lastGNSSepoch)))
             {
-                graphFactors.add(BetweenFactor<Vector3>(T(key - 1), T(key), Vector3::Zero(),
+                graphFactors.add(BetweenFactor<Vector3>(T(lastGNSSepoch), T(key), Vector3::Zero(),
                     gtsam::noiseModel::Isotropic::Sigma(3, 0.01)));
             }
         }
         //            ROS_INFO("add gnssFactor success!");
         lastGNSSepoch = key;
+        return true;
     }
+    return false;
 }
 
 void IMUPreintegration::writeGPSfile(gtime_t gpst, Vector3 ecef, int state, FILE* file)
@@ -336,7 +338,7 @@ void IMUPreintegration::closePosfile()
         fclose(fp);
 }
 
-void IMUPreintegration::addLidarFactor()
+bool IMUPreintegration::addLidarFactor()
 {
     int laserCloudCornerNum, laserCloudSurfNum;
     laserCloudCornerNum = cornercloudMatch->size() / 3;
@@ -349,7 +351,7 @@ void IMUPreintegration::addLidarFactor()
         ROS_INFO("laserCloudCornerNum:%d laserCloudSurfNum:%d", laserCloudCornerNum, laserCloudSurfNum);
     }
     if (laserCloudSurfNum < 1 && laserCloudCornerNum < 1)
-        return;
+        return false;
     // combine corner coeffs
     for (int i = 0; i < laserCloudCornerNum; ++i)
     {
@@ -361,10 +363,8 @@ void IMUPreintegration::addLidarFactor()
         Vector3 nu = (lp - edA).cross(lp - edB);
         Vector3 de = edA - edB;
         double s = 1 - 0.9 * fabs(nu.norm() / de.norm());
-        //        if (s <= 0.1) {
-        //            ROS_WARN("corner s = %lf<0.1",s);
-        //            continue;
-        //        }
+        if (s <= 0.1)
+            continue;
         if (lidarAssociateMode == 0)
         {
             noiseModel::Base::shared_ptr noise = noiseModel::Isotropic::Sigma(1, edgeNoise);
@@ -392,7 +392,8 @@ void IMUPreintegration::addLidarFactor()
         Point3 lp = betweenPose.transformFrom(cp);
         double dist = dot(lp, norm) + surfcloudMatch->points[i * 2 + 1].intensity;
         float s = fabs(1 - 0.9 * fabs(dist) / sqrt(cp.norm()));
-        // if (s > 0.1) {
+        if (s <= 0.1)
+            continue;
         if (lidarAssociateMode == 0)
         {
             noiseModel::Base::shared_ptr noise = noiseModel::Isotropic::Sigma(1, surfNoise);
@@ -414,14 +415,10 @@ void IMUPreintegration::addLidarFactor()
             graphFactors.add(lidarSurffactor);
         }
         laserSurfAvailNum++;
-        // }else {
-        //     if(debugLidarTimestamp){
-        //         ROS_WARN("surf s = %lf<0.1",s);
-        //     }
-        // }
     }
     cornercloudMatch->clear();
     surfcloudMatch->clear();
+    return (laserCornerAvailNum + laserSurfAvailNum) > 0;
 }
 
 void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& featureMsg)
@@ -728,7 +725,13 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         {
             if (coupleMode == 1)
             {
-                addLidarFactor();
+                if (!addLidarFactor())
+                {
+                    graphFactors.add(gtsam::BetweenFactor<gtsam::Pose3>(X(lastKeyIndex),
+                        X(key),
+                        delta_Pose1,
+                        odometryNoise));
+                }
             }
             else if (coupleMode == 0)
             {
@@ -870,7 +873,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     prevVel_ = result.at<gtsam::Vector3>(V(key));
     prevState_ = gtsam::NavState(prevPose_, prevVel_);
     prevBias_ = result.at<gtsam::imuBias::ConstantBias>(B(key));
-    if (estimateExtGPS)
+    if (estimateExtGPS && result.exists(T(key)))
     {
         extGPS = result.at<gtsam::Vector3>(T(key));
         if (debugGps)

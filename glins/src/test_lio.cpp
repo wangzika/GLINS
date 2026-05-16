@@ -9,6 +9,7 @@
 #include "mapping/mapOptmizationGps.h"
 #include "rosbag/bag_player.h"
 #include "rosgraph_msgs/Clock.h"
+#include <cstdlib>
 #ifndef BACKWARD_HAS_DW
 #if defined(__linux__)
 #define BACKWARD_HAS_DW 1
@@ -157,9 +158,12 @@ int main(int argc, char** argv)
 
     MO.savePath(output_path);
 
-    MO.saveMapService();
+    bool saveMap = false;
+    ros::param::param<bool>("/glins/savePCD", saveMap, false);
+    if (saveMap)
+        MO.saveMapService();
 
     PT.closePosfile();
 
-    return 0;
+    std::_Exit(0);
 }

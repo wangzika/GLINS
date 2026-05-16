@@ -172,7 +172,7 @@ public:
 
         void resetParams();
 
-        void addGPSFactor(int& nb, int& npr, int& ndop);
+        bool addGPSFactor(int& nb, int& npr, int& ndop);
 
         void writeGPSfile(gtime_t gpst, Vector3 ecef, int state, FILE* file);
 
@@ -180,7 +180,7 @@ public:
 
         void closePosfile();
 
-        void addLidarFactor();
+        bool addLidarFactor();
 
         void featureHandler(const glins::feature_info::ConstPtr& featureMsg);
 

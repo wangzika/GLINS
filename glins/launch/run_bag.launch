@@ -1,5 +1,6 @@
 <launch>
     <arg name="params" default="$(find glins)/config/params_20240129.yaml"/>
+    <!-- <arg name="params" default="$(find glins)/config/params_gwhudata.yaml"/> -->
     <arg name="bagpath" default="/home/ys/glins_ws/src/full_data/lidar_imu.bag"/>
     <arg name="imu_topic" default="/imu/data"/>
     <arg name="lidar_topic" default="/velodyne_points"/>

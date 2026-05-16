@@ -363,7 +363,7 @@ public:
         nh.param<string>("glins/fgoPath", fgoPath, "/output/rtklib_fgo.pos");
         usleep(100);
     }
-
+    //将imu数据转换到lidar坐标系下
     sensor_msgs::Imu imuConverter(const sensor_msgs::Imu& imu_in)
     {
         sensor_msgs::Imu imu_out = imu_in;
