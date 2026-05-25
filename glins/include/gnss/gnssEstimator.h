@@ -334,6 +334,7 @@ public:
                 //                    epoch = 1;
                 //                    slide_window = true;
                 //                }
+                const bool initializing_epoch = first_init;
                 initialEstimate.insert(X(epoch), pos);
                 nb = addDDCpFactor();
                 npr = addDDPsrFactor();
@@ -361,6 +362,20 @@ public:
                 nv = npr + nb + ndop;
                 fgo.num_factor[0] = npr;
                 fgo.num_factor[2] = ndop;
+                if (!initializing_epoch && (npr < 5 || fgo.num_factor[1] < 8 || gnss_info.stat != SOLQ_FIX))
+                {
+                    ROS_WARN("skip weak GNSS epoch %d weekSec %.3f stat:%d npr:%d ncp:%d sd_size:%zu",
+                        epoch, gnss_info.weekSec, gnss_info.stat, npr, fgo.num_factor[1], gnss_info.SD_Infos.size());
+                    graph.resize(0);
+                    initialEstimate.clear();
+#ifdef PHASEBIAS_as_COMPRESSED
+                    last_ar_index.clear();
+#endif
+                    fgo.rtk.nfix = 0;
+                    gnss_queue.pop_front();
+                    gnss_mutex.unlock();
+                    continue;
+                }
                 //
 //                if ((npr < 4 || ndop < 6)&&epoch!=0){
 //                    Point3 pos_prior(gnss_info.pos[0],gnss_info.pos[1],gnss_info.pos[2]);
@@ -410,7 +425,19 @@ public:
                 //                    tracefile.close();
                 //                }
                 //                PrintKeyVector(graph.keyVector());
-                updateAndMarginalize(graph, initialEstimate, {}, optimizer);
+                try
+                {
+                    updateAndMarginalize(graph, initialEstimate, {}, optimizer);
+                }
+                catch (const std::exception& e)
+                {
+                    ROS_ERROR("GTSAM update failed at epoch %d: %s", epoch, e.what());
+                    graph.resize(0);
+                    initialEstimate.clear();
+                    gnss_queue.pop_front();
+                    gnss_mutex.unlock();
+                    break;
+                }
 
                 //                optimizer.update(graph, initialEstimate);
 
@@ -581,15 +608,22 @@ public:
                     {
                         AmbFullArray[it->first - 1] = prevAmb[it->second];
                     }
-                    if (epoch >= 10)
+                    if (epoch >= windows_size)
                     {
                         KeySet marginalKeys;
-                        marginalKeys.insert(X(epoch - 10));
-                        if (optimizer.valueExists(N(epoch - 10)))
+                        marginalKeys.insert(X(epoch - windows_size));
+                        if (optimizer.valueExists(N(epoch - windows_size)))
                         {
-                            marginalKeys.insert(N(epoch - 10));
+                            marginalKeys.insert(N(epoch - windows_size));
                         }
-                        updateAndMarginalize({}, {}, marginalKeys, optimizer);
+                        try
+                        {
+                            updateAndMarginalize({}, {}, marginalKeys, optimizer);
+                        }
+                        catch (const std::exception& e)
+                        {
+                            ROS_WARN("Skip marginalization at epoch %d: %s", epoch, e.what());
+                        }
                     }
                     average_time = (average_time * epoch + t_opt.toc()) / (epoch + 1);
                     ROS_INFO("average time %.3lf", average_time);

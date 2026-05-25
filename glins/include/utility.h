@@ -359,8 +359,8 @@ public:
 
         nh.param<float>("glins/globalMapLeafSize", globalMapLeafSize, 1.0);
 
-        nh.param<string>("glins/rtklibConfigPath", rtklibConfigPath, "/catkin_ws/src/glins/config/conf/20240129.conf");
-        nh.param<string>("glins/fgoPath", fgoPath, "/output/rtklib_fgo.pos");
+        nh.param<string>("glins/rtklibConfigPath", rtklibConfigPath, "/home/ys/glins_ws/src/GLINS/glins/config/conf/20240129.conf");
+        nh.param<string>("glins/fgoPath", fgoPath, "/home/ys/glins_ws/output/rtklib_fgo.pos");
         usleep(100);
     }
     //将imu数据转换到lidar坐标系下

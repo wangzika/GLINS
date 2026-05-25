@@ -249,11 +249,11 @@ public:
                     sysj = ssatj.sys;
                     // if (!ssatj.vsatP[f])
                     //     continue;
-                    if (!test_sys(sysj, m))
+                    if (!test_sys(sysj, m))//没有这个系统的卫星或者是SBAS卫星
                         continue;
-                    if (gnss_info.SD_Infos[j].Mea_Rover.P[f] == 0.0 || gnss_info.SD_Infos[j].Mea_Base.P[f] == 0.0 || ssatj.azel[1] == 0.0 || ssatj.azel_b[1] == 0.0)
+                    if (gnss_info.SD_Infos[j].Mea_Rover.P[f] == 0.0 || gnss_info.SD_Infos[j].Mea_Base.P[f] == 0.0 || ssatj.azel[1] == 0.0 || ssatj.azel_b[1] == 0.0)//没有观测值或者卫星不可见
                         continue;
-                    if (satexclude(gnss_info.SD_Infos[j].Mea_Rover.sat, ssatj.ephvar, ssatj.svh, &prcopt))
+                    if (satexclude(gnss_info.SD_Infos[j].Mea_Rover.sat, ssatj.ephvar, ssatj.svh, &prcopt))//排除不良卫星
                         continue;
                     if (testsnr(0, f, ssatj.azel[1], gnss_info.SD_Infos[j].Mea_Rover.SNR[f] * SNR_UNIT, &prcopt.snrmask))
                         continue;
