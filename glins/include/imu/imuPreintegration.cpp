@@ -36,7 +36,7 @@ TransformFusion::TransformFusion()
         ros::TransportHints().tcpNoDelay());
 
     pubImuOdometry = nh.advertise<nav_msgs::Odometry>(odomTopic, 2000);
-    pubImuPath = nh.advertise<nav_msgs::Path>("glins/imu/path", 1);
+    pubImuPath = nh.advertise<nav_msgs::Path>("glins/imu/path", 1);//question
 }
 
 Eigen::Affine3f TransformFusion::odom2affine(nav_msgs::Odometry odom)
@@ -533,7 +533,14 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         {
             lla_origin = container.getOrigin();
             gpsPose = prevPose_.compose(gps2imu);
-            posCovariance = optimizer.marginalCovariance(X(0));
+            try
+            {
+                posCovariance = optimizer.marginalCovariance(X(0));
+            }
+            catch (const std::exception& e)
+            {
+                ROS_WARN("skip initial covariance at key 0: %s", e.what());
+            }
             Vector3 ecef = GNSS_Tools::enu2ecef(lla_origin,
                 gpsPose.translation()); // gtools.ENU2ECEF(gpsPose.translation());
             gtime_t curgtime;
@@ -839,18 +846,29 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     prePose = curPose;
 
     // optimize
-    updateAndMarginalize(graphFactors, graphValues, {}, optimizer);
-
-    for (int i = 0; i < 2; i++)
+    try
     {
-        updateAndMarginalize({}, {}, {}, optimizer);
+        updateAndMarginalize(graphFactors, graphValues, {}, optimizer);
+
+        for (int i = 0; i < 2; i++)
+        {
+            updateAndMarginalize({}, {}, {}, optimizer);
+        }
+
+        if (!isRelative)
+        {
+            optimizer.update();
+            optimizer.update();
+            optimizer.update();
+        }
     }
-
-    if (!isRelative)
+    catch (const std::exception& e)
     {
-        optimizer.update();
-        optimizer.update();
-        optimizer.update();
+        ROS_WARN("skip optimization update at key %d: %s", key, e.what());
+        graphFactors.resize(0);
+        graphValues.clear();
+        imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
+        return;
     }
     graphFactors.resize(0);
     graphValues.clear();
@@ -860,10 +878,28 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     static int state = 6;
     static Pose3 sol_pos;
     sol_pos = result.at<gtsam::Pose3>(X(key));
-    posCovariance = optimizer.marginalCovariance(X(key));
-    if (useGPS && useObs && useCarrier && GNSSEnable)
+    bool covariance_valid = true;
+    try
     {
-        state = container.ambiguityResolve(optimizer, result, key, posCovariance, sol_pos);
+        posCovariance = optimizer.marginalCovariance(X(key));
+    }
+    catch (const std::exception& e)
+    {
+        covariance_valid = false;
+        ROS_WARN("skip covariance/AR at key %d: %s", key, e.what());
+    }
+    if (covariance_valid && useGPS && useObs && useCarrier && GNSSEnable && optimizer.valueExists(N(key)))
+    {
+        try
+        {
+            state = container.ambiguityResolve(optimizer, result, key, posCovariance, sol_pos);
+        }
+        catch (const std::exception& e)
+        {
+            state = 6;
+            container.reset_last_ar_index();
+            ROS_WARN("skip ambiguity resolve at key %d: %s", key, e.what());
+        }
     }
     if (debugImu)
     {
@@ -901,7 +937,15 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
                 marginalKeys.insert(T(i));
             }
         }
-        updateAndMarginalize({}, {}, marginalKeys, optimizer);
+        try
+        {
+            updateAndMarginalize({}, {}, marginalKeys, optimizer);
+        }
+        catch (const std::exception& e)
+        {
+            container.reset_last_ar_index();
+            ROS_WARN("skip marginalization at key %d range [%d, %d): %s", key, startKey, endKey, e.what());
+        }
     }
     if (!optimizer.valueExists(N(lastGNSSepoch)))
     {

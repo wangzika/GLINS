@@ -317,12 +317,15 @@ public:
         te = end_time;
     }
 
-    void run()
+    void run(const std::string& imu_bag_path,
+             const std::string& imu_topic,
+             const std::string& lio_pos_path,
+             const std::string& output_path,
+             const std::string& increment_output_path)
     {
         //        string GPSfile = "/home/wangchuji/catkins_gnss/OB_GINS-main/dataset/GNSS_RTK.pos";
         //        string IMUfile = "/home/wangchuji/catkins_gnss/OB_GINS-main/dataset/ADIS16465.txt";
 
-        string imu_topic = "/imu/data";
         topics.push_back(imu_topic);
 
         //        string GPSfile = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/test.pos";
@@ -330,32 +333,43 @@ public:
         //        string IMUfile = "/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/GNSS_INS_Data/urban/imu_adis16465.txt";
         string IMUfile = "/mnt/i/20240705/imu_adis16465.txt";
 
-        result_path = fgoPath; //"/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/GNSS_INS_Data/urban/gins_amb_ac.pos";
-        //        string IMUbag = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Medium-Urban-1/lidar_imu_backup.bag";
-        //        string IMUbag = "/home/wangchuji/catkins_lidar/data/UrbanNav-HK-Data20200314/HK20200314.bag";
-        //        string IMUbag = "/media/wangchuji/T7/20231202/mems_.bag";
-        //        string IMUbag = "/media/wangchuji/T7/20240129/imu/mems.bag";
-        // string IMUbag = "/mnt/i/20240129/imu/mems.bag";
-        // string IMUbag = "/mnt/i/GREATWHUdata/campus-02/cp_02.bag";
-        // string IMUbag = "/mnt/i/20250120/urban_01/1624_filtered.bag";
-        // string IMUbag = "/mnt/i/20250120/urban_03/1719_filtered.bag";
-        string IMUbag = "/mnt/i/HKdataset/UrbanNav-HK_Whampoa-20210517_sensors/UrbanNav-HK_Whampoa-20210521_sensors.bag";
-        //        string IMUbag = "/media/wangchuji/T7/20221029/imu_adis16465.bag";
-        //        result_path = "/home/wangchuji/catkins_gnss/rtklib_GSDC_6th/data/hk1/gins_amb_ac.pos";
+        result_path = output_path;
         fp = fopen(result_path.c_str(), "w");
+        if (!fp)
+        {
+            ROS_ERROR("Unable to open GINS output file: %s", result_path.c_str());
+            return;
+        }
         // fp_incre = fopen("/mnt/i/20240129/imu/incre.txt", "w");
         // fp_incre = fopen("/mnt/i/20250120/urban_01/incre.txt", "w");
-        fp_incre = fopen("/mnt/i/20250120/urban_03/incre.txt", "w");
+        fp_incre = nullptr;
+        if (useLIO)
+        {
+            fp_incre = fopen(increment_output_path.c_str(), "w");
+            if (!fp_incre)
+            {
+                ROS_ERROR("Unable to open LIO increment output file: %s", increment_output_path.c_str());
+                fclose(fp);
+                return;
+            }
+        }
         fprintf(fp, "%%  GPST              x-ecef(m)      y-ecef(m)      z-ecef(m)   Q  ns   sdx(m)   sdy(m)   sdz(m)  sdxy(m)  sdyz(m)  sdzx(m) age(s)  ratio\n");
         /// 改成用文件读取数据
         // loadLIOpos("/mnt/i/20240705/lidar_BLH.txt");
         // loadLIOpos("/mnt/i/GREATWHUdata/campus-02/cp_02_lidar.pos");
         // loadLIOpos("/mnt/i/20240129/final/lio_fgo.pos");
         // loadLIOpos("/mnt/i/20250120/urban_01/lio.pos");
-        loadLIOpos("/mnt/i/20250120/urban_03/lio.pos");
+        if (useLIO)
+        {
+            loadLIOpos(lio_pos_path);
+        }
+        else
+        {
+            ROS_INFO("LIO disabled: run GNSS/IMU fusion only");
+        }
         //        loadGPSfile(GPSfile);
         //    loadIMUfile(IMUfile);
-        loadIMUbag(IMUbag);
+        loadIMUbag(imu_bag_path);
         fclose(fp);
     }
 
@@ -473,6 +487,11 @@ public:
     {
         fstream fp;
         fp.open(LIOfile, std::ios::in);
+        if (!fp.is_open())
+        {
+            ROS_ERROR("Unable to open LIO pose file: %s", LIOfile.c_str());
+            return;
+        }
         string line;
         vector<string> data;
         lla_origin = container.getOrigin();
@@ -484,30 +503,67 @@ public:
             if (line[0] == '%')
                 continue;
             boost::split(data, line, boost::is_any_of(" "), boost::token_compress_on);
-            gtime_t gpst = gpst2time(stoi(data.at(0)), stod(data.at(1)));
-            if (((double)gpst.time + gpst.sec) < ((double)ts.time + ts.sec) || (((double)gpst.time + gpst.sec) > ((double)te.time + te.sec)))
+            if (data.size() < 8)
                 continue;
-            // Vector3 pos(stod(data.at(2)), stod(data.at(3)), stod(data.at(4)));
-            // Vector3 ecef = GNSS_Tools::llh2ecef(pos);
-            Vector3 ecef(stod(data.at(2)), stod(data.at(3)), stod(data.at(4)));
-            Vector3 base_ecef = GNSS_Tools::llh2ecef(lla_origin);
-            Vector3 ecef_vec(ecef[0] - base_ecef[0], ecef[1] - base_ecef[1], ecef[2] - base_ecef[2]);
-            Vector3 enu = GNSS_Tools::ecef2enu(lla_origin, ecef);
-            FrameData frame(stoi(data.at(0)), stod(data.at(1)), enu[0], enu[1], enu[2], stod(data.at(8)) * PI / 180, stod(data.at(7)) * PI / 180, stod(data.at(6)) * PI / 180);
+
+            FrameData frame;
+            if (stod(data.at(0)) > 1e9)
+            {
+                double stamp = stod(data.at(0));
+                if (stamp < ((double)ts.time + ts.sec - 18) || stamp > ((double)te.time + te.sec - 18))
+                    continue;
+                gtime_t gpst;
+                gpst.time = floor(stamp) + 18;
+                gpst.sec = stamp - floor(stamp);
+                frame.weeksec = time2gpst(gpst, &frame.week);
+                frame.timestamp = stamp;
+                frame.translation = Vector3(stod(data.at(1)), stod(data.at(2)), stod(data.at(3)));
+                frame.pose = Pose3(
+                    Rot3::Quaternion(stod(data.at(7)), stod(data.at(4)), stod(data.at(5)), stod(data.at(6))),
+                    frame.translation);
+                frame.ypr = Vector3(
+                    frame.pose.rotation().yaw(),
+                    frame.pose.rotation().pitch(),
+                    frame.pose.rotation().roll());
+            }
+            else
+            {
+                gtime_t gpst = gpst2time(stoi(data.at(0)), stod(data.at(1)));
+                if (((double)gpst.time + gpst.sec) < ((double)ts.time + ts.sec) || (((double)gpst.time + gpst.sec) > ((double)te.time + te.sec)))
+                    continue;
+                Vector3 ecef(stod(data.at(2)), stod(data.at(3)), stod(data.at(4)));
+                Vector3 enu = GNSS_Tools::ecef2enu(lla_origin, ecef);
+                frame = FrameData(stoi(data.at(0)), stod(data.at(1)), enu[0], enu[1], enu[2], stod(data.at(8)) * PI / 180, stod(data.at(7)) * PI / 180, stod(data.at(6)) * PI / 180);
+            }
             if (!lioqueue.empty())
             {
                 Pose3 increPose = lioqueue.back().pose.between(frame.pose);
-                fprintf(fp_incre, "%d %.3lf %.5lf %.5lf %.5lf %.5lf %.5lf %.5lf\n", frame.week, frame.weeksec, increPose.x(), increPose.y(), increPose.z(), increPose.rotation().roll() * 180 / M_PI, increPose.rotation().pitch() * 180 / M_PI, increPose.rotation().yaw() * 180 / M_PI);
+                if (fp_incre)
+                {
+                    fprintf(fp_incre, "%d %.3lf %.5lf %.5lf %.5lf %.5lf %.5lf %.5lf\n", frame.week, frame.weeksec, increPose.x(), increPose.y(), increPose.z(), increPose.rotation().roll() * 180 / M_PI, increPose.rotation().pitch() * 180 / M_PI, increPose.rotation().yaw() * 180 / M_PI);
+                }
             }
             lioqueue.push_back(frame);
         }
-        fclose(fp_incre);
+        if (fp_incre)
+        {
+            fclose(fp_incre);
+            fp_incre = nullptr;
+        }
     }
 
     void loadIMUbag(string IMUfile)
     {
         rosbag::Bag bag;
-        bag.open(IMUfile, rosbag::bagmode::Read);
+        try
+        {
+            bag.open(IMUfile, rosbag::bagmode::Read);
+        }
+        catch (const rosbag::BagException& e)
+        {
+            ROS_ERROR("Unable to open IMU bag: %s (%s)", IMUfile.c_str(), e.what());
+            return;
+        }
         rosbag::View view(bag, rosbag::TopicQuery(topics));
         BOOST_FOREACH(rosbag::MessageInstance const m, view)
         {
@@ -611,20 +667,25 @@ public:
             TicToc t_epoch;
             t_epoch.tic();
             ROS_INFO("%.3lf", curimuTime);
-            while (!lioqueue.empty())
+            bool has_lio_match = false;
+            if (useLIO)
             {
-                if (fabs(lioqueue.front().timestamp - curimuTime) < 0.05)
+                while (!lioqueue.empty())
                 {
-                    curlioframe = lioqueue.front();
-                    lioqueue.pop_front();
-                    break;
-                }
-                else
-                {
-                    if (lioqueue.front().timestamp < curimuTime)
+                    if (fabs(lioqueue.front().timestamp - curimuTime) < 0.05)
+                    {
+                        curlioframe = lioqueue.front();
                         lioqueue.pop_front();
-                    else
+                        has_lio_match = true;
                         break;
+                    }
+                    else
+                    {
+                        if (lioqueue.front().timestamp < curimuTime)
+                            lioqueue.pop_front();
+                        else
+                            break;
+                    }
                 }
             }
             // 0. initialize system
@@ -698,7 +759,10 @@ public:
                 imuIntegratorImu_->resetIntegrationAndSetBias(prevBias_);
                 imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
 
-                lastlioframe = curlioframe;
+                if (useLIO && has_lio_match)
+                {
+                    lastlioframe = curlioframe;
+                }
                 systemInitialized = true;
                 container.setSystemInitialized(systemInitialized);
                 key = 1;
@@ -749,13 +813,14 @@ public:
 
             graphFactors.add(imu_factor);
 
-            Pose3 lidarPose;
-            bool useable;
-            Pose3 increPose = lastlioframe.pose.between(curlioframe.pose);
-            lidarPose = prevState_.pose().compose(increPose);
-            double d_yaw = fabs(curlioframe.pose.rotation().yaw() * 180 / M_PI - lastlioframe.pose.rotation().yaw() * 180 / M_PI);
-            if (useLIO)
+            Pose3 lidarPose = prevState_.pose();
+            Pose3 increPose;
+            double d_yaw = 1.0;
+            if (useLIO && has_lio_match)
             {
+                increPose = lastlioframe.pose.between(curlioframe.pose);
+                lidarPose = prevState_.pose().compose(increPose);
+                d_yaw = fabs(curlioframe.pose.rotation().yaw() * 180 / M_PI - lastlioframe.pose.rotation().yaw() * 180 / M_PI);
                 gtsam::noiseModel::Diagonal::shared_ptr noise_model = gtsam::noiseModel::Diagonal::Sigmas(Vector3(0.04, 0.04, 0.03));
                 noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Huber::Create(1.0), noise_model);
                 // graphFactors.add(BetweenTranslationFactor(X(key - 1), X(key), curlioframe.translation - lastlioframe.translation, huber));
@@ -779,7 +844,7 @@ public:
 
                     //     // graphFactors.add(ZAxisConstraint(X(key), prevPose_.z(), Zaxis_noise));
                     // }
-                if (increPose.translation().norm() < 0.05 && useLIO)
+                if (useLIO && has_lio_match && increPose.translation().norm() < 0.05)
                 {
                     auto staticNoise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6)
                         << 5e-1,
@@ -803,7 +868,7 @@ public:
                     // }
                     // graphFactors.add(NhcFactorZ(X(key), V(key), huberZ));
 
-                    if (useLIO)
+                    if (useLIO && has_lio_match)
                     {
                         auto noiseModel = noiseModel::Diagonal::Sigmas(Vector3(NHCnoise[0] * d_yaw * fabs(increPose.y()), NHCnoise[0], NHCnoise[1]));
                         noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Cauchy::Create(1.0), noiseModel);
@@ -827,7 +892,7 @@ public:
             gtsam::NavState propState_ = imuIntegratorOpt_->predict(prevState_, prevBias_);
             //            prevState_.pose().between(propState_.pose()).print();
             // graphFactors.add(PriorFactor<Pose3>(X(key), propState_.pose(), priorPoseNoise));
-            if (useLIO)
+            if (useLIO && has_lio_match)
             {
                 graphValues.insert(X(key), lidarPose);
             }
@@ -888,7 +953,10 @@ public:
             prevVel_ = result.at<gtsam::Vector3>(V(key));
             prevState_ = gtsam::NavState(prevPose_, prevVel_);
             prevBias_ = result.at<gtsam::imuBias::ConstantBias>(B(key));
-            lastlioframe = curlioframe;
+            if (useLIO && has_lio_match)
+            {
+                lastlioframe = curlioframe;
+            }
             if (estimateExtGPS)
             {
                 extGPS = result.at<gtsam::Vector3>(T(key));
@@ -1077,10 +1145,23 @@ public:
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "roboat_loam");
+    ros::NodeHandle private_nh("~");
 
     time_t t_start, t_end;
 
     t_start = time(0);
+
+    bool gnss_imu_only = true;
+    private_nh.param<bool>("gnss_imu_only", gnss_imu_only, gnss_imu_only);
+    if (gnss_imu_only)
+    {
+        ros::param::set("glins/useGPS", true);
+        ros::param::set("glins/useObs", true);
+        ros::param::set("glins/useCarrier", true);
+        ros::param::set("glins/useLIO", false);
+        ros::param::set("glins/useNHC", false);
+        ROS_INFO("GNSS/IMU only mode enabled: GPS/OBS/Carrier on, LIO/NHC off");
+    }
 
     gnssProcessor processor;
 
@@ -1097,9 +1178,26 @@ int main(int argc, char** argv)
     //    gtime_t ts = gpst2time(2233,551805);//550729); 549002
     //    gtime_t te = gpst2time(2233,552300);
 
-    // 20240129
-    // gtime_t ts = gpst2time(2299, 111965);
-    // gtime_t te = gpst2time(2299, 113000);
+    int gps_week = 2299;
+    double start_sec = 111965.0;
+    double end_sec = 113000.0;
+    std::string imu_bag_path = "/home/ys/glins_ws/src/full_data/lidar_imu.bag";
+    std::string imu_topic = "/imu/data";
+    std::string lio_pos_path = "/home/ys/glins_ws/output/total.pos";
+    std::string output_path = "/home/ys/glins_ws/output/gins.pos";
+    std::string increment_output_path = "/home/ys/glins_ws/output/gins_lio_increment.pos";
+
+    private_nh.param<int>("gps_week", gps_week, gps_week);
+    private_nh.param<double>("start_sec", start_sec, start_sec);
+    private_nh.param<double>("end_sec", end_sec, end_sec);
+    private_nh.param<std::string>("imu_bag_path", imu_bag_path, imu_bag_path);
+    private_nh.param<std::string>("imu_topic", imu_topic, imu_topic);
+    private_nh.param<std::string>("lio_pos_path", lio_pos_path, lio_pos_path);
+    private_nh.param<std::string>("output_path", output_path, output_path);
+    private_nh.param<std::string>("increment_output_path", increment_output_path, increment_output_path);
+
+    gtime_t ts = gpst2time(gps_week, start_sec);
+    gtime_t te = gpst2time(gps_week, end_sec);
 
     // 20240705
     //    gtime_t ts = gpst2time(2321,429370.000 );
@@ -1115,16 +1213,13 @@ int main(int argc, char** argv)
     // gtime_t ts = gpst2time(2350, 120671); //120562
     // gtime_t te = gpst2time(2350, 122400);
 
-    // hk
-    gtime_t ts = gpst2time(2158, 455346); //120562
-    gtime_t te = gpst2time(2158, 456878); 
     gins.set_time(ts, te);
 
     processor.decode(ts, te);
     t_end = time(0);
     ROS_INFO("gnssProcessor took %d second\n", (int)difftime(t_end, t_start));
 
-    gins.run();
+    gins.run(imu_bag_path, imu_topic, lio_pos_path, output_path, increment_output_path);
 
     t_end = time(0);
 

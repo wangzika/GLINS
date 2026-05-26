@@ -1,0 +1,32 @@
+<launch>
+    <arg name="params" default="$(find glins)/config/params_20240129.yaml"/>
+    <arg name="gps_week" default="2299"/>
+    <arg name="start_sec" default="111965"/>
+    <arg name="end_sec" default="113000"/>
+    <arg name="imu_bag_path" default="/home/ys/glins_ws/src/full_data/lidar_imu.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="output_path" default="/home/ys/glins_ws/output/gins.pos"/>
+    <arg name="rtklib_config_path" default="$(find glins)/config/conf/20240129.conf"/>
+    <arg name="fgo_path" default="/home/ys/glins_ws/output/rtklib_fgo.pos"/>
+
+    <param name="use_sim_time" value="true"/>
+    <rosparam file="$(arg params)" command="load"/>
+
+    <param name="glins/useGPS" type="bool" value="true"/>
+    <param name="glins/useObs" type="bool" value="true"/>
+    <param name="glins/useCarrier" type="bool" value="true"/>
+    <param name="glins/useLIO" type="bool" value="false"/>
+    <param name="glins/useNHC" type="bool" value="false"/>
+    <param name="glins/rtklibConfigPath" type="string" value="$(arg rtklib_config_path)"/>
+    <param name="glins/fgoPath" type="string" value="$(arg fgo_path)"/>
+
+    <node pkg="glins" type="glins_test_gins" name="glins_test_gins" output="screen">
+        <param name="gnss_imu_only" value="true" type="bool"/>
+        <param name="gps_week" value="$(arg gps_week)" type="int"/>
+        <param name="start_sec" value="$(arg start_sec)" type="double"/>
+        <param name="end_sec" value="$(arg end_sec)" type="double"/>
+        <param name="imu_bag_path" value="$(arg imu_bag_path)" type="string"/>
+        <param name="imu_topic" value="$(arg imu_topic)" type="string"/>
+        <param name="output_path" value="$(arg output_path)" type="string"/>
+    </node>
+</launch>
