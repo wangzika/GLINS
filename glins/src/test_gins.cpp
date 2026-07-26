@@ -33,6 +33,8 @@ using gtsam::symbol_shorthand::T;
 using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using gtsam::symbol_shorthand::X; // Pose3 (x,y,z,r,p,y)
 typedef pair<nav_msgs::Odometry, rtklib::GNSS_Info> GNSSPose;
+#if defined(__has_include)
+#if __has_include("backward.hpp")
 #ifndef BACKWARD_HAS_DW
 #if defined(__linux__)
 #define BACKWARD_HAS_DW 1
@@ -45,6 +47,8 @@ namespace backward
 {
     backward::SignalHandling sh;
 }
+#endif
+#endif
 // static int test_sys(int sys, int m) {
 //     switch (sys) {
 //         case SYS_GPS:
@@ -662,7 +666,8 @@ public:
         ndop = 0;
         volatile bool GNSS_enable = false;
 
-        if ((GNSS_enable = container.isGNSSEnable(curimuTime)) ) // 125) || (systemInitialized && fabs(curimuTime - round(curimuTime)) < 0.00125)
+        const double imuGnssTolerance = std::min(gnssSyncTolerance, 0.005);
+        if ((GNSS_enable = container.isGNSSEnable(curimuTime, imuGnssTolerance)) ) // 125) || (systemInitialized && fabs(curimuTime - round(curimuTime)) < 0.00125)
         {
             TicToc t_epoch;
             t_epoch.tic();
@@ -1113,7 +1118,8 @@ public:
         if (container.checkIsEmpty())
             return;
 
-        if (container.syncObs(lastImuT_opt, 0.005))
+        const double imuGnssTolerance = std::min(gnssSyncTolerance, 0.005);
+        if (container.syncObs(lastImuT_opt, imuGnssTolerance))
         {
             if (!useObs)
             {
@@ -1186,6 +1192,7 @@ int main(int argc, char** argv)
     std::string lio_pos_path = "/home/ys/glins_ws/output/total.pos";
     std::string output_path = "/home/ys/glins_ws/output/gins.pos";
     std::string increment_output_path = "/home/ys/glins_ws/output/gins_lio_increment.pos";
+    bool exit_on_completion = false;
 
     private_nh.param<int>("gps_week", gps_week, gps_week);
     private_nh.param<double>("start_sec", start_sec, start_sec);
@@ -1195,6 +1202,7 @@ int main(int argc, char** argv)
     private_nh.param<std::string>("lio_pos_path", lio_pos_path, lio_pos_path);
     private_nh.param<std::string>("output_path", output_path, output_path);
     private_nh.param<std::string>("increment_output_path", increment_output_path, increment_output_path);
+    private_nh.param<bool>("exit_on_completion", exit_on_completion, exit_on_completion);
 
     gtime_t ts = gpst2time(gps_week, start_sec);
     gtime_t te = gpst2time(gps_week, end_sec);
@@ -1225,6 +1233,12 @@ int main(int argc, char** argv)
 
     ROS_INFO("Optimizer took %d second\n", (int)difftime(t_end, t_start));
     //    ROS_INFO("\033[1;32m----> IMU Preintegration Started.\033[0m");
+
+    if (exit_on_completion)
+    {
+        ros::shutdown();
+        return 0;
+    }
 
     ros::spin();
 

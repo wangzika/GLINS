@@ -10,6 +10,8 @@
 #include "rosbag/bag_player.h"
 #include "rosgraph_msgs/Clock.h"
 #include <cstdlib>
+#if defined(__has_include)
+#if __has_include("backward.hpp")
 #ifndef BACKWARD_HAS_DW
 #if defined(__linux__)
 #define BACKWARD_HAS_DW 1
@@ -22,6 +24,8 @@ namespace backward
 {
     backward::SignalHandling sh;
 }
+#endif
+#endif
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "lio");
@@ -33,12 +37,17 @@ int main(int argc, char** argv)
     int gps_week;
     double start_sec;
     double end_sec;
+    bool use_gps;
+    bool enable_map_visualization_thread;
     bool useRoslaunch = false;
     ros::NodeHandle nh("~");
     nh.getParam("useRoslaunch", useRoslaunch);
     nh.param<int>("gps_week", gps_week, 2299);
     nh.param<double>("start_sec", start_sec, 111965.0);
     nh.param<double>("end_sec", end_sec, 112280.0);
+    ros::param::param<bool>("/glins/useGPS", use_gps, true);
+    ros::param::param<bool>("/glins/enableOfflineMapVisualizationThread",
+        enable_map_visualization_thread, false);
     nh.param<std::string>("output_path", output_path, "/output/total.pos");
     if (!useRoslaunch && argc >= 4)
     {
@@ -116,9 +125,12 @@ int main(int argc, char** argv)
     //    PT.loadGPSfile(GPSfile);
     PT.setStartTime(ts);
     //    GP.ts = ts;
-    GP.decode(ts, te);
+    if (use_gps)
+        GP.decode(ts, te);
 
-    std::thread visualizeMapThread(&mapOptimization::visualizeGlobalMapThread, &MO);
+    std::thread visualizeMapThread;
+    if (enable_map_visualization_thread)
+        visualizeMapThread = std::thread(&mapOptimization::visualizeGlobalMapThread, &MO);
 
     int i = 0;
     BOOST_FOREACH(const rosbag::MessageInstance m, view)

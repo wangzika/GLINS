@@ -679,7 +679,9 @@ bool mapOptimization::saveMapService()
 }
 void mapOptimization::visualizeGlobalMapThread()
 {
-    ros::Rate rate(0.2);
+    // Wall time keeps an offline rosbag run able to shut down after the last
+    // /clock message. ros::Rate can block forever when simulated time stops.
+    ros::WallRate rate(0.2);
     while (ros::ok())
     {
         rate.sleep();
@@ -2487,19 +2489,16 @@ bool mapOptimization::findGPSAvail(double curTime)
     double curgnssTime = gnssOdomQueue.front().header.stamp.toSec();
     double delta_imu2gps = curTime - curgnssTime;
     double delta_round = curTime - round(curTime);
-    if (delta_imu2gps > 0.0015)
-    { //0015
-        while (!gnssOdomQueue.empty())
-        {
-            gnssOdomQueue.pop_front();
-            if (gnssOdomQueue.empty()) return false;
-            curgnssTime = gnssOdomQueue.front().header.stamp.toSec();
-            delta_imu2gps = curTime - curgnssTime;
-            if (delta_imu2gps <= 0) break;
-        }
+    while (!gnssOdomQueue.empty()
+        && curgnssTime < curTime - gnssSyncTolerance)
+    {
+        gnssOdomQueue.pop_front();
+        if (gnssOdomQueue.empty()) return false;
+        curgnssTime = gnssOdomQueue.front().header.stamp.toSec();
+        delta_imu2gps = curTime - curgnssTime;
     }
 
-    const bool syncedWithGnss = fabs(delta_imu2gps) < 0.0015;
+    const bool syncedWithGnss = fabs(delta_imu2gps) <= gnssSyncTolerance;
     if (lidarAssociateMode == 2)
         return syncedWithGnss;
 

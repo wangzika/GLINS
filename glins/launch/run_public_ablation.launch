@@ -1,0 +1,44 @@
+<launch>
+    <arg name="params" default="$(find glins)/config/params_urbannav_medium_ablation.yaml"/>
+    <arg name="bagpath" default="/data/zbwang/public/UrbanNav_HK_Medium_20210517/medium_public_0_120_uncompressed.bag"/>
+    <arg name="imu_topic" default="/imu/data"/>
+    <arg name="lidar_topic" default="/velodyne_points"/>
+    <arg name="gps_week" default="2158"/>
+    <arg name="start_sec" default="95593"/>
+    <arg name="end_sec" default="95713"/>
+    <arg name="output_path" default="/tmp/glins_urbannav_total.pos"/>
+    <arg name="rtklib_config_path" default="$(find glins)/config/conf/Urban_medium_public.conf"/>
+    <arg name="fgo_path" default="/tmp/glins_urbannav_fgo.pos"/>
+    <arg name="lidar_associate_mode" default="2"/>
+    <arg name="couple_mode" default="1"/>
+    <arg name="use_gps" default="true"/>
+    <arg name="use_obs" default="true"/>
+    <arg name="use_carrier" default="true"/>
+    <arg name="use_lio" default="true"/>
+
+    <param name="use_sim_time" value="true"/>
+    <rosparam file="$(arg params)" command="load"/>
+
+    <param name="glins/lidarAssociateMode" type="int" value="$(arg lidar_associate_mode)"/>
+    <param name="glins/coupleMode" type="int" value="$(arg couple_mode)"/>
+    <param name="glins/useGPS" type="bool" value="$(arg use_gps)"/>
+    <param name="glins/useObs" type="bool" value="$(arg use_obs)"/>
+    <param name="glins/useCarrier" type="bool" value="$(arg use_carrier)"/>
+    <param name="glins/useLIO" type="bool" value="$(arg use_lio)"/>
+    <param name="glins/loopClosureEnableFlag" type="bool" value="false"/>
+    <param name="glins/rtklibConfigPath" type="string" value="$(arg rtklib_config_path)"/>
+    <param name="glins/fgoPath" type="string" value="$(arg fgo_path)"/>
+    <param name="glins/enableOfflineMapVisualizationThread" type="bool" value="false"/>
+
+    <node pkg="glins" type="glins_test_lio" name="glins_public_ablation"
+          output="screen" required="true">
+        <param name="useRoslaunch" value="true" type="bool"/>
+        <param name="bagpath" value="$(arg bagpath)" type="string"/>
+        <param name="imu_topic" value="$(arg imu_topic)" type="string"/>
+        <param name="lidar_topic" value="$(arg lidar_topic)" type="string"/>
+        <param name="gps_week" value="$(arg gps_week)" type="int"/>
+        <param name="start_sec" value="$(arg start_sec)" type="double"/>
+        <param name="end_sec" value="$(arg end_sec)" type="double"/>
+        <param name="output_path" value="$(arg output_path)" type="string"/>
+    </node>
+</launch>

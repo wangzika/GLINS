@@ -271,7 +271,7 @@ bool IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
     if (container.checkIsEmpty())
         return false;
 
-    if (container.syncObs(lastImuT_opt, 0.015))
+    if (container.syncObs(lastImuT_opt, gnssSyncTolerance))
     {
         if (!useObs)
         {
@@ -492,7 +492,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         graphValues.insert(V(0), prevVel_);
         graphValues.insert(B(0), prevBias_);
 
-        if (GNSSEnable = container.isGNSSEnable(currentCorrectionTime))
+        if (GNSSEnable = container.isGNSSEnable(currentCorrectionTime, gnssSyncTolerance))
         {
             if (useGPS)
             {
@@ -688,7 +688,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     te.sec = currentCorrectionTime - round(currentCorrectionTime);
     volatile double weeksec = time2gpst(te, NULL);
     // add GPS factor (wcj)
-    if (GNSSEnable = container.isGNSSEnable(currentCorrectionTime))
+    if (GNSSEnable = container.isGNSSEnable(currentCorrectionTime, gnssSyncTolerance))
     {
         gpsKeyQueue.push_back(key);
         if (useGPS)
@@ -1002,7 +1002,10 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     ROS_INFO("average time %.3lf", average_time);
     ROS_INFO("optize and margin time %.3lf", t_opt.toc());
 
-    GNSSEnable = (fabs(currentCorrectionTime - round(currentCorrectionTime)) < 0.005);
+    // Preserve the association result computed above. Public datasets often
+    // timestamp the nearest LiDAR frame a few tens of milliseconds away from
+    // the exact GNSS epoch, so re-checking a hard-coded 5 ms integer boundary
+    // here silently suppresses every valid fused output.
     // write gps result
     if (GNSSEnable)
     {

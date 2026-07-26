@@ -1,0 +1,5 @@
+status=0
+elapsed_s=330
+gps_keys=119
+rollbacks=215
+lidar_rejects=101

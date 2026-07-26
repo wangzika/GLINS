@@ -877,28 +877,26 @@ public:
         return gnss_queue.empty();
     }
 
-    bool isGNSSEnable(double curimuTime)
+    bool isGNSSEnable(double curimuTime, double tolerance = 0.00125)
     {
-        double curgnssTime = gnss_queue.front().first.header.stamp.toSec();
-        double delta_imu2gps = curimuTime - curgnssTime;
-        if (delta_imu2gps > 0.00125)
-        { // 0015
-            while (!gnss_queue.empty())
-            {
-                gnss_queue.pop_front();
-                curgnssTime = gnss_queue.front().first.header.stamp.toSec();
-                delta_imu2gps = curimuTime - curgnssTime;
-                if (delta_imu2gps <= 0)
-                    break;
-            }
+        std::lock_guard<std::mutex> lock(mtxGpsInfo);
+        const double safeTolerance = std::max(0.0, tolerance);
+        while (!gnss_queue.empty()
+            && gnss_queue.front().first.header.stamp.toSec() < curimuTime - safeTolerance)
+        {
+            gnss_queue.pop_front();
         }
-        // ROS_INFO("delta_imu2gps:%.5lf",delta_imu2gps);
-        // ROS_INFO("optimization timestamp: curIMUtime: %.8lf curGNSStime: %.8lf",curimuTime,curgnssTime);
-        return (fabs(delta_imu2gps) < 0.00125);
+        if (gnss_queue.empty())
+            return false;
+
+        const double curgnssTime = gnss_queue.front().first.header.stamp.toSec();
+        return fabs(curimuTime - curgnssTime) <= safeTolerance;
     };
 
     double getCurGnssTime(){
-        return gnss_queue.front().first.header.stamp.toSec();
+        std::lock_guard<std::mutex> lock(mtxGpsInfo);
+        return gnss_queue.empty() ? std::numeric_limits<double>::quiet_NaN()
+                                  : gnss_queue.front().first.header.stamp.toSec();
     }
     void updateSatState()
     {

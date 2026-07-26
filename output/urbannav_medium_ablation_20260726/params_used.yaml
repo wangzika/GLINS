@@ -1,0 +1,161 @@
+glins:
+  # UrbanNav-HK Medium-Urban-1 public 120 s segment.
+  # The initial pose is taken from the official SPAN-CPT reference at
+  # GPS week 2158 / SOW 95593, matching the paper's reference initialization.
+
+  # Topics and frames
+  pointCloudTopic: "velodyne_points"
+  imuTopic: "imu/data"
+  odomTopic: "odometry/imu"
+  gpsTopic: "gps_odom"
+  lidarFrame: "base_link"
+  baselinkFrame: "base_link"
+  odometryFrame: "odom"
+  mapFrame: "map"
+
+  # GNSS/RTK settings. Paths are overridden by the public-data launch file.
+  useGPS: true
+  gpsFrequence: 1
+  useImuHeadingInitialization: true
+  useGpsElevation: true
+  gpsCovThreshold: 25.0
+  poseCovThreshold: 100.0
+  useObs: true
+  useCarrier: true
+  # The public bag's LiDAR stamps are offset by about 23 ms from integer
+  # GNSS epochs. Associate the nearest 10 Hz scan without crossing epochs.
+  gnssSyncTolerance: 0.05
+  rtklibConfigPath: "/tmp/glins_urbannav_medium.conf"
+  fgoPath: "/tmp/glins_urbannav_medium_fgo.pos"
+
+  # Reproducibility/debug settings
+  debugLidarTimestamp: false
+  debugImu: false
+  debugGps: false
+  addoptPose: true
+
+  # Output settings
+  savePCD: false
+  savePCDDirectory: "/tmp/glins_urbannav_map/"
+  configDirectory: "/tmp/"
+  sequence: "urbannav_medium"
+
+  # Velodyne HDL-32E
+  sensor: velodyne
+  N_SCAN: 32
+  Horizon_SCAN: 1800
+  downsampleRate: 1
+  lidarMinRange: 1.5
+  lidarMaxRange: 100.0
+
+  # Paper ablation switches:
+  #   0 = frame-to-map (FM)
+  #   1 = frame-to-frame (FF)
+  #   2 = frame-to-last-GNSS-available-frame (GG)
+  lidarAssociateMode: 2
+  #   0 = pose-level relative LiDAR constraint
+  #   1 = feature-level tightly coupled LiDAR factors
+  coupleMode: 1
+  surfNoise: 2.5
+  edgeNoise: 2.5
+  lidarImuGateTranslation: 5.0
+  lidarImuGateRotationDeg: 20.0
+
+  # Official Xsens noise values distributed with UrbanNav-HK.
+  imuFrequence: 400
+  imuAccNoise: 1.1197412605492375e-02
+  imuGyrNoise: 1.0270904839480961e-02
+  imuAccBiasN: 1.1751767903346351e-04
+  imuGyrBiasN: 9.1355383994881894e-05
+  imuGravity: 9.8099
+  imuRPYWeight: 0.1
+  useNHC: false
+  useLIO: true
+  NHCnoise: [1.0, 0.1]
+  thres_angular_velocity: 5.0
+
+  # Official SPAN-CPT pose at Unix 1621218775 / GPST 2158:95593.
+  # UrbanNav defines body x=right, y=forward, z=up, while the optimizer's
+  # roll/pitch/yaw are rotations about x/y/z. Therefore:
+  #   optimizer roll  = reference Pitch
+  #   optimizer pitch = reference Roll
+  #   optimizer yaw   = -reference Heading
+  useGroundTruthHeading: true
+  GroundTruthRoll: 0.4409540487
+  GroundTruthPitch: -1.7398149928
+  GroundTruthHeading: 132.534729738
+  useGroundTruthPos: true
+  GroundTruthPos: [-2418181.5014, 5385962.2886, 2405305.1800]
+
+  # Official UrbanNav center-LiDAR-to-IMU and antenna-to-IMU extrinsics.
+  imuType: 1
+  extrinsicTrans: [0.0, 0.0, 0.28]
+  extrinsicRot: [1.0, 0.0, 0.0,
+                 0.0, 1.0, 0.0,
+                 0.0, 0.0, 1.0]
+  extrinsicRPY: [1.0, 0.0, 0.0,
+                 0.0, 1.0, 0.0,
+                 0.0, 0.0, 1.0]
+  estimateExtGPS: false
+  extrinsicGPS: [0.0, 0.86, -0.31]
+
+  # LOAM feature extraction and mapping
+  edgeThreshold: 1.0
+  surfThreshold: 0.1
+  edgeFeatureMinValidNum: 10
+  surfFeatureMinValidNum: 100
+  odometrySurfLeafSize: 0.4
+  mappingCornerLeafSize: 0.2
+  mappingSurfLeafSize: 0.4
+  z_tollerance: 1000.0
+  rotation_tollerance: 1000.0
+  numberOfCores: 4
+  mappingProcessInterval: 0.09
+  surroundingkeyframeAddingDistThreshold: 0.5
+  surroundingkeyframeAddingAngleThreshold: 0.1
+  surroundingKeyframeDensity: 2.0
+  surroundingKeyframeSearchRadius: 100.0
+
+  # Disabled in the paper for every LiDAR-based comparison.
+  loopClosureEnableFlag: false
+  loopClosureFrequency: 1.0
+  surroundingKeyframeSize: 30
+  historyKeyframeSearchRadius: 25.0
+  historyKeyframeSearchTimeDiff: 25.0
+  historyKeyframeSearchNum: 25
+  historyKeyframeFitnessScore: 0.9
+
+  globalMapVisualizationSearchRadius: 1000.0
+  globalMapVisualizationPoseDensity: 10.0
+  globalMapVisualizationLeafSize: 0.5
+  globalMapLeafSize: 0.5
+
+save_flag: true
+
+# Patchwork++ defaults retained for the mapping module.
+sensor_height: 2.0
+mode: "czm"
+verbose: false
+visualize: false
+num_iter: 5
+num_lpr: 20
+num_min_pts: 10
+th_seeds: 0.2
+th_dist: 0.075
+th_seeds_v: 0.25
+th_dist_v: 0.1
+max_r: 60.0
+min_r: 2.7
+uprightness_thr: 0.707
+adaptive_seed_selection_margin: -1.1
+czm:
+  num_zones: 4
+  num_sectors_each_zone: [16, 32, 54, 32]
+  mum_rings_each_zone: [2, 4, 4, 4]
+  elevation_thresholds: [0.0, 0.0, 0.0, 0.0]
+  flatness_thresholds: [0.0, 0.0, 0.0, 0.0]
+enable_RNR: true
+enable_RVPF: true
+enable_TGR: true
+RNR_ver_angle_thr: -15.0
+RNR_intensity_thr: 0.2
