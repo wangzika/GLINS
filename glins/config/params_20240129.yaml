@@ -23,6 +23,13 @@ glins:
   poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
   useObs: true
   useCarrier: true
+  # Ambiguity graph conditioning. DD carrier factors pre-whiten internally, so
+  # the outer scale stays at 1.0. A per-block datum closes the DD common mode,
+  # while a finite continuity sigma avoids near-hard constraints.
+  ambiguityPriorSigma: 3.0
+  ambiguityDatumSigma: 1.0
+  ambiguityContinuitySigma: 0.05
+  carrierOuterSigma: 1.0
   rtklibConfigPath: /home/ys/glins_ws/src/GLINS/glins/config/conf/20240129.conf
   fgoPath: /home/ys/glins_ws/output/rtklib_fgo.pos
 

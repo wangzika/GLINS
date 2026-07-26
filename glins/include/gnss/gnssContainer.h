@@ -103,6 +103,14 @@ private:
     vector<double> GroundTruthPosV;
     Vector3 GroundTruthPos;
 
+    // Carrier-phase residuals are pre-whitened inside their factors. These
+    // outer scales keep the ambiguity graph observable without creating
+    // near-hard constraints that become ill-conditioned after marginalizing.
+    double ambiguityPriorSigma = 3.0;
+    double ambiguityDatumSigma = 1.0;
+    double ambiguityContinuitySigma = 0.05;
+    double carrierOuterSigma = 1.0;
+
 public:
     double tt = 0;
 
@@ -153,6 +161,16 @@ public:
     {
         last_ar_index.clear();
     }
+
+    map<int, int> get_last_ar_index() const
+    {
+        return last_ar_index;
+    }
+
+    void set_last_ar_index(const map<int, int>& ar_index)
+    {
+        last_ar_index = ar_index;
+    }
     void setSystemInitialized(bool initialized)
     {
         systemInitialized = initialized;
@@ -202,8 +220,14 @@ public:
             ros::TransportHints().tcpNoDelay());
         nh.param<bool>("glins/useGroundTruthPos", useGroundTruthPos, false);
         nh.param<vector<double>>("glins/GroundTruthPos", GroundTruthPosV, vector<double>(3, 0));
+        nh.param<double>("glins/ambiguityPriorSigma", ambiguityPriorSigma, 3.0);
+        nh.param<double>("glins/ambiguityDatumSigma", ambiguityDatumSigma, 1.0);
+        nh.param<double>("glins/ambiguityContinuitySigma", ambiguityContinuitySigma, 0.05);
+        nh.param<double>("glins/carrierOuterSigma", carrierOuterSigma, 1.0);
         GroundTruthPos = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(GroundTruthPosV.data(), 3, 1);
         Vector3 ecef_ref(prcopt.rb[0], prcopt.rb[1], prcopt.rb[2]);
+        ROS_INFO("ambiguity noise: prior=%.3f datum=%.3f continuity=%.3f carrier_outer=%.3f",
+            ambiguityPriorSigma, ambiguityDatumSigma, ambiguityContinuitySigma, carrierOuterSigma);
     }
 
     int addDDPsrFactorENU(gtsam::NonlinearFactorGraph* graphFactors, gtsam::Values* graphValues, int key)
@@ -512,7 +536,7 @@ public:
                         {
                             graphFactors->add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
                                 noiseModel::Diagonal::Sigmas(
-                                    Vector(1).setConstant(30))));
+                                    Vector(1).setConstant(ambiguityPriorSigma))));
                         }
                     }
                 }
@@ -535,11 +559,20 @@ public:
                         {
                             graphFactors->add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
                                 noiseModel::Diagonal::Sigmas(
-                                    Vector(1).setConstant(30))));
+                                    Vector(1).setConstant(ambiguityPriorSigma))));
                         }
                     }
+                    // A DD block has one common ambiguity mode. Anchor the
+                    // reference ambiguity to the RTK float estimate so every
+                    // constellation/frequency block has an explicit datum.
+                    if (systemInitialized)
+                    {
+                        graphFactors->add(GNSSPhasePriorConstraintCompress(N(key), compress_ar[ncp - 1], ncp - 1,
+                            noiseModel::Diagonal::Sigmas(
+                                Vector(1).setConstant(ambiguityDatumSigma))));
+                    }
                     gtsam::Vector var(Infos_Else.size());
-                    var.setConstant(0.1);
+                    var.setConstant(carrierOuterSigma);
                     noiseModel::Base::shared_ptr noise = noiseModel::Diagonal::Sigmas(var);
                     noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Huber::Create(1.0), noise);
                     if (estimateExtGPS)
@@ -561,7 +594,8 @@ public:
         }
         if (!sats.empty() && !freqs.empty() && prcopt.modear > 2)
         { // fgo.num_factor[1]!=0
-            noiseModel::Base::shared_ptr noise = noiseModel::Diagonal::Sigmas(Vector(sats.size()).setConstant(1e-3));
+            noiseModel::Base::shared_ptr noise = noiseModel::Diagonal::Sigmas(
+                Vector(sats.size()).setConstant(ambiguityContinuitySigma));
             noiseModel::Base::shared_ptr huber = noiseModel::Robust::Create(noiseModel::mEstimator::Huber::Create(1.0), noise);
 
             GNSSAmbConstraintCompress::shared_ptr amb_constraint_factor(new GNSSAmbConstraintCompress(N(key), N(lastkey), 0.0, sats, freqs, ar_index, last_ar_index,
@@ -576,7 +610,8 @@ public:
         //        noiseModel::Diagonal::Sigmas(Vector(compress_ar.size()).setConstant(30)
         if (!systemInitialized && compress_ar.size() > 0)
         {
-            gtsam::Matrix priorNoiseMatrix = gtsam::Matrix::Identity(compress_ar.size(), compress_ar.size()) * 900;
+            gtsam::Matrix priorNoiseMatrix = gtsam::Matrix::Identity(compress_ar.size(), compress_ar.size())
+                * ambiguityPriorSigma * ambiguityPriorSigma;
             graphFactors->add(PriorFactor<Vector>(N(key), (Vector)compress_ar,
                 noiseModel::Gaussian::Covariance(priorNoiseMatrix)));
         }

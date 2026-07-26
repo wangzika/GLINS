@@ -302,7 +302,6 @@ bool IMUPreintegration::addGPSFactor(int& nb, int& npr, int& ndop)
             }
         }
         //            ROS_INFO("add gnssFactor success!");
-        lastGNSSepoch = key;
         return true;
     }
     return false;
@@ -569,6 +568,19 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         container.setSystemInitialized(systemInitialized);
         return;
     }
+
+    // Everything below belongs to one logical optimizer transaction. Factor
+    // construction updates GNSS bookkeeping before ISAM2 accepts the graph, so
+    // keep the last committed state and restore it if update() throws.
+    const int committedLastGNSSepoch = lastGNSSepoch;
+    const map<int, int> committedLastArIndex = container.get_last_ar_index();
+    const std::deque<int> committedGpsKeyQueue = gpsKeyQueue;
+    const int committedLastKeyIndex = lastKeyIndex;
+    const gtsam::Pose3 committedLastKeyPose = lastKeyPose;
+    const gtsam::Pose3 committedPrePose = prePose;
+    const double committedLastGpsTime = lastgpstime;
+    bool addedGNSSFactor = false;
+
     // 1. integrate imu data and optimize
     while (!imuQueOpt.empty())
     {
@@ -675,7 +687,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         if (useGPS)
         {
             ROS_INFO("GPS KEY %d", key);
-            addGPSFactor(nb, npr, ndop);
+            addedGNSSFactor = addGPSFactor(nb, npr, ndop);
         }
     }
 
@@ -846,6 +858,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     prePose = curPose;
 
     // optimize
+    gtsam::ISAM2 optimizerBeforeUpdate = optimizer;
     try
     {
         updateAndMarginalize(graphFactors, graphValues, {}, optimizer);
@@ -864,11 +877,22 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     }
     catch (const std::exception& e)
     {
-        ROS_WARN("skip optimization update at key %d: %s", key, e.what());
+        optimizer = optimizerBeforeUpdate;
+        lastGNSSepoch = committedLastGNSSepoch;
+        container.set_last_ar_index(committedLastArIndex);
+        gpsKeyQueue = committedGpsKeyQueue;
+        lastKeyIndex = committedLastKeyIndex;
+        lastKeyPose = committedLastKeyPose;
+        prePose = committedPrePose;
+        lastgpstime = committedLastGpsTime;
         graphFactors.resize(0);
         graphValues.clear();
-        imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
+        ROS_WARN("rolled back optimization update at key %d: %s", key, e.what());
         return;
+    }
+    if (addedGNSSFactor)
+    {
+        lastGNSSepoch = key;
     }
     graphFactors.resize(0);
     graphValues.clear();
@@ -919,6 +943,8 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     }
     if (gpsKeyQueue.size() > 2)
     {
+        const std::deque<int> gpsKeyQueueBeforeMarginalization = gpsKeyQueue;
+        gtsam::ISAM2 optimizerBeforeMarginalization = optimizer;
         KeySet marginalKeys;
         int startKey = gpsKeyQueue.front();
         gpsKeyQueue.pop_front();
@@ -943,11 +969,12 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         }
         catch (const std::exception& e)
         {
-            container.reset_last_ar_index();
-            ROS_WARN("skip marginalization at key %d range [%d, %d): %s", key, startKey, endKey, e.what());
+            optimizer = optimizerBeforeMarginalization;
+            gpsKeyQueue = gpsKeyQueueBeforeMarginalization;
+            ROS_WARN("rolled back marginalization at key %d range [%d, %d): %s", key, startKey, endKey, e.what());
         }
     }
-    if (!optimizer.valueExists(N(lastGNSSepoch)))
+    if (useCarrier && !optimizer.valueExists(N(lastGNSSepoch)))
     {
         container.reset_last_ar_index();
         ROS_INFO("%d does not exist", lastGNSSepoch);
