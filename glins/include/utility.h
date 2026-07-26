@@ -116,6 +116,8 @@ public:
     float lidarMaxRange;
     int lidarAssociateMode;
     int coupleMode;
+    double lidarImuGateTranslation;
+    double lidarImuGateRotationDeg;
 
     // IMU
     int imuType;
@@ -283,6 +285,8 @@ public:
         nh.param<float>("glins/lidarMaxRange", lidarMaxRange, 1000.0);
         nh.param<int>("glins/lidarAssociateMode", lidarAssociateMode, 2);
         nh.param<int>("glins/coupleMode", coupleMode, 2);
+        nh.param<double>("glins/lidarImuGateTranslation", lidarImuGateTranslation, 5.0);
+        nh.param<double>("glins/lidarImuGateRotationDeg", lidarImuGateRotationDeg, 20.0);
 
         nh.param<int>("glins/imuType", imuType, 0);
         nh.param<int>("glins/imuFrequence", imuFrequence, 500);

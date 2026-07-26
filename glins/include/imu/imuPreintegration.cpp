@@ -632,6 +632,13 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     gtsam::Pose3 curPose = lidarPose.compose(lidar2Imu);
     gtsam::NavState propState_ = imuIntegratorOpt_->predict(prevState_, prevBias_);
     gtsam::Pose3 delta_Pose = propState_.pose().between(curPose);
+    const double lidarImuTranslationError = delta_Pose.translation().norm();
+    const double lidarImuRotationError = gtsam::Rot3::Logmap(delta_Pose.rotation()).norm();
+    const bool lidarMeasurementAccepted =
+        std::isfinite(lidarImuTranslationError)
+        && std::isfinite(lidarImuRotationError)
+        && lidarImuTranslationError <= lidarImuGateTranslation
+        && lidarImuRotationError <= lidarImuGateRotationDeg * M_PI / 180.0;
     isRelative = fabs(delta_Pose.rotation().yaw() * 180 / M_PI) < 10 && delta_Pose.translation().head<2>().norm() < 2.0;
     gtsam::Pose3 delta_Pose1 = lastKeyPose.between(curPose);
     isStatic = delta_Pose1.translation().norm() < 0.02 && fabs(delta_Pose1.rotation().yaw() * 180 / M_PI) < 1.0;
@@ -703,7 +710,7 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     PoseRotationPrior<gtsam::Pose3> pose_rotation_factor(X(key), curPose.rotation(),
         degenerate ? correctRotNoise2 : correctRotNoise);
 
-    if (!isRelative || isStatic)
+    if (lidarMeasurementAccepted && (!isRelative || isStatic))
     {
         // if(!GNSSEnable) graphFactors.add(pose_factor);
         graphFactors.add(pose_rotation_factor);
@@ -730,7 +737,13 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
         // graphFactors.add(gtsam::PriorFactor<gtsam::Pose3>(X(key), prevPose_, correctRotNoise));
     }
 
-    if (lidarAssociateMode != 0)
+    if (!lidarMeasurementAccepted)
+    {
+        ROS_WARN_THROTTLE(1.0,
+            "Reject lidar factor at key %d: IMU disagreement %.3f m / %.3f deg",
+            key, lidarImuTranslationError, lidarImuRotationError * 180.0 / M_PI);
+    }
+    else if (lidarAssociateMode != 0)
     {
         if (!featureInfo.isKeyFrame || !GNSSEnable)
         {
@@ -840,19 +853,19 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     if (GNSSEnable)
     {
         lastKeyIndex = key;
-        lastKeyPose = curPose;
+        lastKeyPose = propState_.pose();
         lastgpstime = currentCorrectionTime;
     }
     else if (fabs(currentCorrectionTime - round(currentCorrectionTime)) < 0.005)
     {
         gpsKeyQueue.push_back(key);
         lastKeyIndex = key;
-        lastKeyPose = curPose;
+        lastKeyPose = propState_.pose();
     }
-    if (lidarAssociateMode == 1)
+    if (lidarAssociateMode == 1 && lidarMeasurementAccepted)
     {
         lastKeyIndex = key;
-        lastKeyPose = curPose;
+        lastKeyPose = propState_.pose();
     }
 
     prePose = curPose;
@@ -899,6 +912,12 @@ void IMUPreintegration::featureHandler(const glins::feature_info::ConstPtr& feat
     // Overwrite the beginning of the preintegration for the next step.
     // do ambiguty resolve
     gtsam::Values result = optimizer.calculateEstimate();
+    if (lastKeyIndex == key)
+    {
+        // Keep the next relative LiDAR factor referenced to the committed
+        // fused state, not to an unvalidated raw scan-matching pose.
+        lastKeyPose = result.at<gtsam::Pose3>(X(key));
+    }
     static int state = 6;
     static Pose3 sol_pos;
     sol_pos = result.at<gtsam::Pose3>(X(key));

@@ -70,6 +70,12 @@ lastGNSSepoch = key;
 
 滑窗边缘化也使用 iSAM2 和 GNSS key 队列快照。若 `marginalizeLeaves()` 失败，恢复边缘化前的完整状态，不清空仍与当前图一致的 `last_ar_index`。
 
+### 2.6 拒绝失真的 LiDAR 增量
+
+完整回放后段还暴露出一个独立问题：局部地图匹配偶尔输出数百米到数万米的跳变，旧代码即使发现 LiDAR 与 IMU 预测不一致，仍会把该相对位姿和旋转先验加入图中，并把未验证的 LiDAR 位姿登记成下一帧参考。极端残差会污染状态，随后表现为位姿变量 `X(key)` 的数值欠约束。
+
+现在先计算 LiDAR 位姿与 IMU 预积分预测之间的 6-DoF 差异。默认平移超过 5 m 或旋转超过 20° 时，不加入该帧 LiDAR 因子；下一帧参考位姿使用优化成功后的融合状态，而不是原始 scan-matching 输出。IMU、GNSS 因子仍可继续推进图。
+
 ## 3. 参数解释
 
 | 参数 | 默认值 | 含义 |
@@ -78,6 +84,8 @@ lastGNSSepoch = key;
 | `ambiguityDatumSigma` | 1.0 cycle | 每个双差块公共模态的基准强度 |
 | `ambiguityContinuitySigma` | 0.05 cycle | 无周跳前后历元模糊度连续性 |
 | `carrierOuterSigma` | 1.0 | 已预白化载波残差的外层单位噪声 |
+| `lidarImuGateTranslation` | 5.0 m | LiDAR 与 IMU 预测的最大允许平移差 |
+| `lidarImuGateRotationDeg` | 20.0° | LiDAR 与 IMU 预测的最大允许旋转差 |
 
 调参顺序：
 

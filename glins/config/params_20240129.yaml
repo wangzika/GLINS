@@ -30,6 +30,8 @@ glins:
   ambiguityDatumSigma: 1.0
   ambiguityContinuitySigma: 0.05
   carrierOuterSigma: 1.0
+  lidarImuGateTranslation: 5.0
+  lidarImuGateRotationDeg: 20.0
   rtklibConfigPath: /home/ys/glins_ws/src/GLINS/glins/config/conf/20240129.conf
   fgoPath: /home/ys/glins_ws/output/rtklib_fgo.pos
 
