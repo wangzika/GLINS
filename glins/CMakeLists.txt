@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
         jsk_recognition_msgs
         # pcl library
         pcl_conversions
+        pcl_ros
         # msgs
         std_msgs
         sensor_msgs
@@ -96,6 +97,7 @@ catkin_package(
         nav_msgs
         geometry_msgs
         sensor_msgs
+        pcl_ros
         jsk_recognition_msgs
         message_runtime
         message_generation

@@ -640,7 +640,9 @@ cd /home/zbwang/GLINS
 source /opt/ros/noetic/setup.zsh
 
 catkin_make \
+  -j4 -l4 \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="/home/zbwang/FAST_GLIO/.remote_deps/root/opt/ros/noetic;/opt/ros/noetic" \
   -DGTSAM_DIR=/home/zbwang/GLINS/.deps/gtsam/lib/cmake/GTSAM
 
 source devel/setup.zsh
@@ -1214,7 +1216,9 @@ git pull --ff-only
 cd /home/zbwang/GLINS
 
 catkin_make \
+  -j4 -l4 \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="/home/zbwang/FAST_GLIO/.remote_deps/root/opt/ros/noetic;/opt/ros/noetic" \
   -DGTSAM_DIR=/home/zbwang/GLINS/.deps/gtsam/lib/cmake/GTSAM
 ```
 
@@ -1313,7 +1317,9 @@ source devel/setup.zsh
 
 ```bash
 catkin_make \
+  -j4 -l4 \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="/home/zbwang/FAST_GLIO/.remote_deps/root/opt/ros/noetic;/opt/ros/noetic" \
   -DGTSAM_DIR=/home/zbwang/GLINS/.deps/gtsam/lib/cmake/GTSAM
 ```
 
