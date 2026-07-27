@@ -1,14 +1,43 @@
-.vscode
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# IDE settings
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+
+# Python caches
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Runtime logs and debug traces
+*.log
+**/debug/
+/glins/log.txt
+
+# Local datasets
 数据.zip
 数据/
 Users/
 data_test/
+**/data_test/
 *.bag
 *.pcd
 *.ply
 *.obs
 *.rnx
+
+# Local build and experiment artifacts
 docker/build/
 docker/devel/
 docker/logs/
 docker/output/
+tmp/
+output/*.pptx
+output/*.pptx.inspect.ndjson
+output/.~*.pptx
+output/pptx/
+output/**/raw/*.pos
