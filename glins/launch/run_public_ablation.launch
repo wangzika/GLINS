@@ -15,6 +15,7 @@
     <arg name="use_obs" default="true"/>
     <arg name="use_carrier" default="true"/>
     <arg name="use_lio" default="true"/>
+    <arg name="visualize" default="false"/>
 
     <param name="use_sim_time" value="true"/>
     <rosparam file="$(arg params)" command="load"/>
@@ -28,7 +29,7 @@
     <param name="glins/loopClosureEnableFlag" type="bool" value="false"/>
     <param name="glins/rtklibConfigPath" type="string" value="$(arg rtklib_config_path)"/>
     <param name="glins/fgoPath" type="string" value="$(arg fgo_path)"/>
-    <param name="glins/enableOfflineMapVisualizationThread" type="bool" value="false"/>
+    <param name="glins/enableOfflineMapVisualizationThread" type="bool" value="$(arg visualize)"/>
 
     <node pkg="glins" type="glins_test_lio" name="glins_public_ablation"
           output="screen" required="true">
@@ -41,4 +42,10 @@
         <param name="end_sec" value="$(arg end_sec)" type="double"/>
         <param name="output_path" value="$(arg output_path)" type="string"/>
     </node>
+
+    <group if="$(arg visualize)">
+        <node pkg="rviz" type="rviz" name="glins_public_rviz"
+              args="-d $(find glins)/launch/include/config/vlp.rviz"
+              output="screen" required="false"/>
+    </group>
 </launch>

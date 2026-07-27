@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+visualize="${GLINS_VISUALIZE:-false}"
 workspace="${GLINS_WORKSPACE:-/home/zbwang/GLINS}"
 dataset="${URBANNAV_DATASET:-/data/zbwang/public/UrbanNav_HK_Medium_20210517}"
 result_root="${1:-/data/zbwang/results/glins_public_ablation/urbannav_medium_120s_$(date +%Y%m%d_%H%M%S)}"
@@ -39,6 +40,7 @@ run_lidar_method() {
     start_wall="$(date +%s)"
     set +e
     roslaunch glins run_public_ablation.launch \
+        visualize:="${visualize}" \
         params:="${params}" bagpath:="${bag}" \
         start_sec:="${start_sec}" end_sec:="${end_sec}" \
         lidar_associate_mode:="${associate_mode}" \
