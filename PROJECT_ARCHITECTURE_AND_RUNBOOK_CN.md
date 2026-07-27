@@ -679,7 +679,16 @@ end_sec: 95713
 duration: 120秒
 ```
 
-`URBANNAV_DATASET` 目前只能改变数据根目录，不能改变bag文件名和时间范围。
+脚本支持以下环境变量：
+
+```text
+URBANNAV_DATASET
+URBANNAV_BAG
+URBANNAV_START_SEC
+URBANNAV_END_SEC
+```
+
+不设置这些变量时，默认仍运行120秒测试段。
 
 ### 11.2 只运行GG，不开RViz
 
@@ -750,19 +759,18 @@ gg_pose
 
 ## 12. 运行完整785秒路线
 
-### 12.1 当前限制
+### 12.1 全程参数
 
-当前批处理脚本仍把bag和时间写死为120秒，所以仅设置：
+完整路线使用：
 
-```bash
-URBANNAV_BAG=...
-URBANNAV_START_SEC=...
-URBANNAV_END_SEC=...
+```text
+bag: full_original/ros/UrbanNav-HK_TST-20210517_sensors.bag
+start_sec: 95593
+end_sec: 96379
 ```
 
-不会改变当前脚本行为。
-
-在脚本尚未参数化前，应直接调用 `roslaunch`。
+脚本通过 `URBANNAV_BAG`、`URBANNAV_START_SEC` 和
+`URBANNAV_END_SEC` 接收这些参数。
 
 ### 12.2 完整GG，不开RViz
 
@@ -770,60 +778,32 @@ URBANNAV_END_SEC=...
 cd /home/zbwang/GLINS
 source devel/setup.zsh
 
-FULL_RESULT=/data/zbwang/results/glins_public_ablation/gg_full_785s
-mkdir -p "$FULL_RESULT/gg"
-
-roslaunch glins run_public_ablation.launch \
-  params:=/home/zbwang/GLINS/src/glins/config/params_urbannav_medium_ablation.yaml \
-  bagpath:=/data/zbwang/public/UrbanNav_HK_Medium_20210517/full_original/ros/UrbanNav-HK_TST-20210517_sensors.bag \
-  gps_week:=2158 \
-  start_sec:=95593 \
-  end_sec:=96379 \
-  lidar_associate_mode:=2 \
-  couple_mode:=1 \
-  use_gps:=true \
-  use_obs:=true \
-  use_carrier:=true \
-  rtklib_config_path:=/home/zbwang/GLINS/src/glins/config/conf/Urban_medium_public.conf \
-  output_path:="$FULL_RESULT/gg/total.pos" \
-  fgo_path:="$FULL_RESULT/gg/fgo.pos" \
-  visualize:=false
+URBANNAV_BAG=/data/zbwang/public/UrbanNav_HK_Medium_20210517/full_original/ros/UrbanNav-HK_TST-20210517_sensors.bag \
+URBANNAV_START_SEC=95593 \
+URBANNAV_END_SEC=96379 \
+GLINS_VISUALIZE=false \
+./src/glins/scripts/run_public_ablation.sh \
+  /data/zbwang/results/glins_public_ablation/gg_full_785s \
+  gg
 ```
 
 预计约35至50分钟，具体取决于服务器负载和地图规模。
 
 ### 12.3 完整GG，打开RViz
 
-从服务器图形桌面执行，把最后一项改成：
-
-```bash
-visualize:=true
-```
-
-完整命令：
+从服务器图形桌面执行：
 
 ```bash
 cd /home/zbwang/GLINS
 source devel/setup.zsh
 
-FULL_RESULT=/data/zbwang/results/glins_public_ablation/gg_full_785s_rviz
-mkdir -p "$FULL_RESULT/gg"
-
-roslaunch glins run_public_ablation.launch \
-  params:=/home/zbwang/GLINS/src/glins/config/params_urbannav_medium_ablation.yaml \
-  bagpath:=/data/zbwang/public/UrbanNav_HK_Medium_20210517/full_original/ros/UrbanNav-HK_TST-20210517_sensors.bag \
-  gps_week:=2158 \
-  start_sec:=95593 \
-  end_sec:=96379 \
-  lidar_associate_mode:=2 \
-  couple_mode:=1 \
-  use_gps:=true \
-  use_obs:=true \
-  use_carrier:=true \
-  rtklib_config_path:=/home/zbwang/GLINS/src/glins/config/conf/Urban_medium_public.conf \
-  output_path:="$FULL_RESULT/gg/total.pos" \
-  fgo_path:="$FULL_RESULT/gg/fgo.pos" \
-  visualize:=true
+URBANNAV_BAG=/data/zbwang/public/UrbanNav_HK_Medium_20210517/full_original/ros/UrbanNav-HK_TST-20210517_sensors.bag \
+URBANNAV_START_SEC=95593 \
+URBANNAV_END_SEC=96379 \
+GLINS_VISUALIZE=true \
+./src/glins/scripts/run_public_ablation.sh \
+  /data/zbwang/results/glins_public_ablation/gg_full_785s_rviz \
+  gg
 ```
 
 ### 12.4 完整路线评估限制
@@ -1302,15 +1282,14 @@ lidar_rejects=0
 
 ## 20. 当前已知限制
 
-1. 当前批处理脚本的bag和起止时间仍固定为120秒；
-2. 当前默认评估真值也只覆盖120秒；
-3. 完整路线需要直接传launch参数，或后续参数化Shell脚本；
-4. 公共120秒区间没有RTK fixed解，不能直接复现论文0.20米；
-5. `gg_pose` 不等于论文严格Semi-TC；
-6. IMU初始零偏仍有进一步参数化和在线估计空间；
-7. GNSS权重尚可根据fixed/float/DGPS、卫星高度角和残差继续自适应；
-8. RViz会增加计算和图形开销，不建议在最终批量精度实验中开启；
-9. 完整路线地图规模更大，需要关注内存、回滚和LiDAR拒绝数量。
+1. 当前默认评估真值只覆盖120秒；
+2. 完整路线虽可由Shell环境变量启动，但需要完整ECEF真值才能正确评估；
+3. 公共120秒区间没有RTK fixed解，不能直接复现论文0.20米；
+4. `gg_pose` 不等于论文严格Semi-TC；
+5. IMU初始零偏仍有进一步参数化和在线估计空间；
+6. GNSS权重尚可根据fixed/float/DGPS、卫星高度角和残差继续自适应；
+7. RViz会增加计算和图形开销，不建议在最终批量精度实验中开启；
+8. 完整路线地图规模更大，需要关注内存、回滚和LiDAR拒绝数量。
 
 ---
 

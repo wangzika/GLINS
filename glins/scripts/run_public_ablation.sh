@@ -7,11 +7,11 @@ dataset="${URBANNAV_DATASET:-/data/zbwang/public/UrbanNav_HK_Medium_20210517}"
 result_root="${1:-/data/zbwang/results/glins_public_ablation/urbannav_medium_120s_$(date +%Y%m%d_%H%M%S)}"
 methods="${2:-rtk_gins,lio,fm,ff,gg,gg_pose}"
 
-bag="${dataset}/medium_public_0_120_uncompressed.bag"
+bag="${URBANNAV_BAG:-${dataset}/medium_public_0_120_uncompressed.bag}"
 params="${workspace}/src/glins/config/params_urbannav_medium_ablation.yaml"
 rtk_config="${workspace}/src/glins/config/conf/Urban_medium_public.conf"
-start_sec=95593
-end_sec=95713
+start_sec="${URBANNAV_START_SEC:-95593}"
+end_sec="${URBANNAV_END_SEC:-95713}"
 
 for required_path in "${bag}" "${params}" "${rtk_config}"; do
     if [[ ! -r "${required_path}" ]]; then

@@ -10,6 +10,7 @@
     <arg name="output_path" default="/home/ys/glins_ws/output/total.pos"/>
     <arg name="rtklib_config_path" default="$(find glins)/config/conf/20240129.conf"/>
     <arg name="fgo_path" default="/home/ys/glins_ws/output/rtklib_fgo.pos"/>
+    <arg name="save_pcd_directory" default="$(env HOME)/GLINS/output/"/>
     <arg name="rviz" default="true"/>
     <arg name="robot_state_publisher" default="false"/>
     <arg name="rviz_config" default="$(find glins)/launch/include/config/vlp.rviz"/>
@@ -17,7 +18,7 @@
     <param name="use_sim_time" value="true"/>
     <rosparam file="$(arg params)" command="load"/>
 
-    <param name="glins/savePCDDirectory" type="string" value="/home/ys/glins_ws/output/"/>
+    <param name="glins/savePCDDirectory" type="string" value="$(arg save_pcd_directory)"/>
     <param name="glins/configDirectory" type="string" value="$(find glins)/config/"/>
     <param name="glins/sequence" type="string" value="MAP"/>
     <param name="glins/rtklibConfigPath" type="string" value="$(arg rtklib_config_path)"/>
